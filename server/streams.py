@@ -116,24 +116,24 @@ async def _playable_file(identifier: str) -> dict | None:
     return None
 
 
-async def resolve(tmdb_id: int, title: str, year: str | None = None) -> dict:
-    """Return a lawful playable source for a title, or an error object.
+async def resolve(
+    tmdb_id: int,
+    title: str | None = None,
+    year: str | None = None,
+) -> dict:
+    """Return a WFS embed source using the TMDB ID."""
 
-    Only curated, verified public-domain films are offered. Archive.org's title
-    search is far too fuzzy to be trusted for "Play" (it returns vtuber models,
-    game clips, promos, and intro videos for common names), so we deliberately do
-    NOT use it here — a title either has a verified film or it streams nothing.
-    """
-    if tmdb_id in CURATED:
-        source = await _playable_file(CURATED[tmdb_id])
-        if source:
-            return {
-                "source": source["url"],
-                "type": source["type"],
-                "sourceName": "archive.org",
-                "identifier": CURATED[tmdb_id],
-                "title": title,
-                "year": year,
-            }
+    print("====================================")
+    print("WFS RESOLVE CALLED")
+    print("TMDB ID:", tmdb_id)
+    print("TITLE:", title)
+    print("YEAR:", year)
+    print("====================================")
 
-    return {"error": "No freely available stream found for this title."}
+    return {
+        "tmdbId": tmdb_id,
+        "title": title,
+        "year": year,
+        "sourceName": "wfs",
+        "embedUrl": f"https://embed.wfs.lol/embed/movie/{tmdb_id}",
+    }
