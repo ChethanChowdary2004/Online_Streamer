@@ -46,12 +46,19 @@ export const getMovieDetail = (id) => getJSON(`/api/movie/${id}/detail`)
 
 export const getTvDetail = (id) => getJSON(`/api/tv/${id}/detail`)
 
+export const getTvSeason = (id, season) =>
+  getJSON(`/api/tv/${id}/season/${season}`)
+
 export const searchMulti = (q, page = 1) =>
   getJSON(`/api/search?q=${encodeURIComponent(q)}&page=${page}`)
 
-// Resolve a lawful, freely-streamable video source (HLS or MP4).
-export const getStream = ({ tmdbId, title, year }) =>
-  getJSON(
-    `/api/stream?tmdb_id=${tmdbId}&title=${encodeURIComponent(title)}` +
-      (year ? `&year=${encodeURIComponent(year)}` : ''),
-  )
+// Resolve the embed servers (WFS + VidLink) for a movie or TV title.
+// TV shows pass season + episode so each provider gets the right URL.
+export const getStream = ({ tmdbId, title, year, mediaType, season, episode }) => {
+  const params = new URLSearchParams({ tmdb_id: tmdbId, title })
+  if (year) params.set('year', year)
+  if (mediaType) params.set('media_type', mediaType)
+  if (season) params.set('season', season)
+  if (episode) params.set('episode', episode)
+  return getJSON(`/api/stream?${params}`)
+}

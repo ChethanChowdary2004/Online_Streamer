@@ -514,6 +514,36 @@ button {
   font-size: 14px;
 }
 
+.player-selects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 0 4px 16px;
+}
+
+.player-selects label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.player-selects select {
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #333;
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 14px;
+  min-width: 180px;
+  outline: none;
+}
+
+.player-selects select:focus {
+  border-color: var(--accent);
+}
+
 .player-error {
   aspect-ratio: 16 / 9;
   display: flex;
@@ -822,6 +852,57 @@ button {
   align-items: center;
   gap: 6px;
   margin-top: 2px;
+}
+
+/* ---------- Server bar (below the player) ---------- */
+.servers {
+  margin: 14px 4px 4px;
+}
+
+.servers-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.servers-label {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.servers-status {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.server-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.server-chip {
+  border: 1px solid #333;
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 13px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.server-chip:hover {
+  border-color: var(--accent);
+}
+
+.server-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
 }
 
 /* ---------- Search page ---------- */

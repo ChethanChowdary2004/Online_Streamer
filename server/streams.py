@@ -116,24 +116,69 @@ async def _playable_file(identifier: str) -> dict | None:
     return None
 
 
+# Embed providers. Each is an iframable source; we offer several so playback
+# never depends on a single host. The player lets the user pick (or auto-fall
+# through) them.
+WFS_BASE = "https://embed.wfs.lol/embed"
+VIDLINK_BASE = "https://vidlink.pro"
+
+
+def _build_servers(
+    media_type: str,
+    tmdb_id: int,
+    season: int | None = None,
+    episode: int | None = None,
+) -> list[dict]:
+    """Return the embed-server list for a title.
+
+    Movies -> /embed/movie/{id} (WFS) and /movie/{id} (VidLink).
+    TV/anime -> /embed/tv/{id}/{s}/{e} (WFS) and /tv/{id}/{s}/{e} (VidLink).
+    """
+    if media_type == "tv" and season and episode:
+        return [
+            {
+                "id": "wfs",
+                "name": "WFS",
+                "embedUrl": f"{WFS_BASE}/tv/{tmdb_id}/{season}/{episode}",
+            },
+            {
+                "id": "vidlink",
+                "name": "VidLink",
+                "embedUrl": f"{VIDLINK_BASE}/tv/{tmdb_id}/{season}/{episode}",
+            },
+        ]
+    return [
+        {
+            "id": "wfs",
+            "name": "WFS",
+            "embedUrl": f"{WFS_BASE}/movie/{tmdb_id}",
+        },
+        {
+            "id": "vidlink",
+            "name": "VidLink",
+            "embedUrl": f"{VIDLINK_BASE}/movie/{tmdb_id}",
+        },
+    ]
+
+
 async def resolve(
     tmdb_id: int,
     title: str | None = None,
     year: str | None = None,
+    media_type: str = "movie",
+    season: int | None = None,
+    episode: int | None = None,
 ) -> dict:
-    """Return a WFS embed source using the TMDB ID."""
-
-    print("====================================")
-    print("WFS RESOLVE CALLED")
-    print("TMDB ID:", tmdb_id)
-    print("TITLE:", title)
-    print("YEAR:", year)
-    print("====================================")
-
+    if not tmdb_id:
+        return {
+            "error": "No TMDB ID found for this title."
+        }
+    servers = _build_servers(media_type, tmdb_id, season, episode)
     return {
         "tmdbId": tmdb_id,
         "title": title,
         "year": year,
-        "sourceName": "wfs",
-        "embedUrl": f"https://embed.wfs.lol/embed/movie/{tmdb_id}",
+        "servers": servers,
+        # First server is the one Auto starts with.
+        "defaultServer": servers[0]["id"] if servers else None,
     }

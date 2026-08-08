@@ -10,10 +10,9 @@ import useFetch from '../hooks/useFetch'
 import HeroBanner from '../components/HeroBanner'
 import MovieRow from '../components/MovieRow'
 
-// Anime / Horror are keyword shelves on TMDB (there is no "anime" or "horror"
-// genre), so they go through the discover endpoint.
+// Anime is a keyword shelf on TMDB (there is no "anime" genre), so it goes
+// through the discover endpoint rather than a plain list.
 const ANIME_KEYWORD = 210024
-const HORROR_KEYWORD = 315058
 
 export default function Home() {
   const trending = useFetch(() => getTrending())
@@ -24,13 +23,7 @@ export default function Home() {
   const actionAdventure = useFetch(() => discoverMovies({ with_genres: '28,12' }))
   const comedy = useFetch(() => discoverMovies({ with_genres: '35' }))
   const sciFiFantasy = useFetch(() => discoverMovies({ with_genres: '878,14' }))
-  const horrorTopRated = useFetch(() =>
-    discoverTv({
-      with_keywords: HORROR_KEYWORD,
-      sort_by: 'vote_average.desc',
-      'vote_count.gte': 50,
-    }),
-  )
+  const topRatedSeries = useFetch(() => getTvList('top_rated'))
 
   // Hero = top five trending movies for the auto-sliding banner.
   const heroItems = useMemo(
@@ -53,7 +46,7 @@ export default function Home() {
     { title: 'Action & Adventure', list: actionAdventure, type: 'movie' },
     { title: 'Comedy', list: comedy, type: 'movie' },
     { title: 'Sci-Fi & Fantasy', list: sciFiFantasy, type: 'movie' },
-    { title: 'Top Rated Horror Series', list: horrorTopRated, type: 'tv' },
+    { title: 'Top Rated Series', list: topRatedSeries, type: 'tv' },
   ]
 
   return (

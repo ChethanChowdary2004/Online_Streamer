@@ -107,6 +107,14 @@ async def tv_detail(tv_id: int) -> dict:
     return detail
 
 
+@app.get("/api/tv/{tv_id}/season/{season}")
+async def tv_season(tv_id: int, season: int) -> dict:
+    """Episodes for one season of a TV show/anime.
+    Enables season/episode picking in the player.
+    """
+    return await tmdb.tmdb(f"/tv/{tv_id}/season/{season}")
+
+
 @app.get("/api/search")
 async def search(
     q: str = Query(..., min_length=1), page: int = Query(1, ge=1)
@@ -125,10 +133,22 @@ async def genres() -> dict:
 
 @app.get("/api/stream")
 async def get_stream(
-    tmdb_id: int, title: str = "", year: str = ""
+    tmdb_id: int,
+    title: str = "",
+    year: str = "",
+    media_type: str = Query("movie", pattern="^(movie|tv)$"),
+    season: int | None = Query(None, ge=1),
+    episode: int | None = Query(None, ge=1),
 ) -> dict:
-    """Resolve a lawful, freely-streamable video source (HLS or MP4)."""
-    result = await streams.resolve(tmdb_id, title or None, year or None)
+    """Resolve embed servers (WFS + VidLink) for a movie or TV title."""
+    result = await streams.resolve(
+        tmdb_id,
+        title or None,
+        year or None,
+        media_type,
+        season,
+        episode,
+    )
     if "error" in result:
         raise HTTPException(404, result["error"])
     return result
