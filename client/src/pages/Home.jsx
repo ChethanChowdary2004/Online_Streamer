@@ -1,39 +1,64 @@
 import { useMemo } from 'react'
-import { getMovieList, getTvList } from '../api'
+import {
+  getTrending,
+  getMovieList,
+  getTvList,
+  discoverMovies,
+  discoverTv,
+} from '../api'
 import useFetch from '../hooks/useFetch'
 import HeroBanner from '../components/HeroBanner'
 import MovieRow from '../components/MovieRow'
 
+// Anime / Horror are keyword shelves on TMDB (there is no "anime" or "horror"
+// genre), so they go through the discover endpoint.
+const ANIME_KEYWORD = 210024
+const HORROR_KEYWORD = 315058
+
 export default function Home() {
-  const now = useFetch(() => getMovieList('now_playing'))
-  const popular = useFetch(() => getMovieList('popular'))
-  const topRated = useFetch(() => getMovieList('top_rated'))
-  const tvPopular = useFetch(() => getTvList('popular'))
-  const tvTopRated = useFetch(() => getTvList('top_rated'))
+  const trending = useFetch(() => getTrending())
+  const popularMovies = useFetch(() => getMovieList('popular'))
+  const popularSeries = useFetch(() => getTvList('popular'))
+  const popularAnime = useFetch(() => discoverTv({ with_keywords: ANIME_KEYWORD }))
+  const topRatedMovies = useFetch(() => getMovieList('top_rated'))
+  const actionAdventure = useFetch(() => discoverMovies({ with_genres: '28,12' }))
+  const comedy = useFetch(() => discoverMovies({ with_genres: '35' }))
+  const sciFiFantasy = useFetch(() => discoverMovies({ with_genres: '878,14' }))
+  const horrorTopRated = useFetch(() =>
+    discoverTv({
+      with_keywords: HORROR_KEYWORD,
+      sort_by: 'vote_average.desc',
+      'vote_count.gte': 50,
+    }),
+  )
 
-  // Hero = first non-adult movie currently playing.
-  const hero = useMemo(() => {
-    const results = now.data?.results || []
-    const pick = results.find((m) => !m.adult) || results[0]
-    return pick ? { ...pick, media_type: 'movie' } : null
-  }, [now.data])
+  // Hero = top five trending movies for the auto-sliding banner.
+  const heroItems = useMemo(
+    () =>
+      (trending.data?.results || [])
+        .filter((m) => !m.adult)
+        .slice(0, 5)
+        .map((m) => ({ ...m, media_type: 'movie' })),
+    [trending.data],
+  )
 
-  const loading =
-    now.loading && popular.loading && topRated.loading && tvPopular.loading && tvTopRated.loading
-
-  if (loading) return <div className="spinner" />
+  // Show the spinner until the hero is ready; rows appear as they load.
+  if (trending.loading) return <div className="spinner" />
 
   const rows = [
-    { title: 'Now Playing', list: now, type: 'movie' },
-    { title: 'Popular Movies', list: popular, type: 'movie' },
-    { title: 'Top Rated Movies', list: topRated, type: 'movie' },
-    { title: 'Popular TV Series', list: tvPopular, type: 'tv' },
-    { title: 'Top Rated TV', list: tvTopRated, type: 'tv' },
+    { title: 'Popular Movies', list: popularMovies, type: 'movie' },
+    { title: 'Popular Series', list: popularSeries, type: 'tv' },
+    { title: 'Popular Anime', list: popularAnime, type: 'tv' },
+    { title: 'Top Rated Movies', list: topRatedMovies, type: 'movie' },
+    { title: 'Action & Adventure', list: actionAdventure, type: 'movie' },
+    { title: 'Comedy', list: comedy, type: 'movie' },
+    { title: 'Sci-Fi & Fantasy', list: sciFiFantasy, type: 'movie' },
+    { title: 'Top Rated Horror Series', list: horrorTopRated, type: 'tv' },
   ]
 
   return (
     <>
-      <HeroBanner item={hero} />
+      <HeroBanner items={heroItems} />
       {rows.map((row) => (
         <MovieRow
           key={row.title}

@@ -35,6 +35,10 @@ app.add_middleware(
 MOVIE_LISTS = {"now_playing", "popular", "top_rated", "upcoming"}
 TV_LISTS = {"popular", "top_rated", "airing_today", "on_the_air"}
 
+# Query params the home page is allowed to forward to the TMDB discover
+# endpoint (genre/keyword shelves). Anything else is dropped.
+DISCOVER_ALLOWED = {"with_genres", "with_keywords", "sort_by", "vote_count.gte"}
+
 
 @app.get("/api/health")
 async def health() -> dict:
@@ -55,6 +59,34 @@ async def tv_list(list: str, page: int = Query(1, ge=1, le=500)) -> dict:
     if list not in TV_LISTS:
         raise HTTPException(404, f"Unknown TV list: {list}")
     return await tmdb.tmdb(f"/tv/{list}", {"page": page})
+
+
+@app.get("/api/trending")
+async def trending(
+    media_type: str = Query("movie", pattern="^(movie|tv|all)$"),
+    time_window: str = Query("week", pattern="^(day|week)$"),
+    page: int = Query(1, ge=1, le=500),
+) -> dict:
+    """Trending shelf: /api/trending (movies this week by default)."""
+    return await tmdb.tmdb(f"/trending/{media_type}/{time_window}", {"page": page})
+
+
+@app.get("/api/discover/{media_type}")
+async def discover(media_type: str, request: Request) -> dict:
+    """TMDB discover for {movie|tv}: forwards a whitelisted param subset.
+
+    Enables genre/keyword shelves like 'Action & Adventure' (28,12), 'Comedy'
+    (35) or 'Anime' (keyword 210024) straight from the client.
+    """
+    if media_type not in {"movie", "tv"}:
+        raise HTTPException(404, f"Unknown media type: {media_type}")
+    params = {
+        key: value
+        for key, value in request.query_params.items()
+        if key in DISCOVER_ALLOWED
+    }
+    params.setdefault("sort_by", "popularity.desc")
+    return await tmdb.tmdb(f"/discover/{media_type}", params)
 
 
 @app.get("/api/movie/{movie_id}/detail")
