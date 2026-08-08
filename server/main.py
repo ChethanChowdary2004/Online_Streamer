@@ -35,6 +35,10 @@ app.add_middleware(
 MOVIE_LISTS = {"now_playing", "popular", "top_rated", "upcoming"}
 TV_LISTS = {"popular", "top_rated", "airing_today", "on_the_air"}
 
+# Query params the home page is allowed to forward to the TMDB discover
+# endpoint (genre/keyword shelves). Anything else is dropped.
+DISCOVER_ALLOWED = {"with_genres", "with_keywords", "sort_by", "vote_count.gte"}
+
 
 @app.get("/api/health")
 async def health() -> dict:
@@ -57,6 +61,34 @@ async def tv_list(list: str, page: int = Query(1, ge=1, le=500)) -> dict:
     return await tmdb.tmdb(f"/tv/{list}", {"page": page})
 
 
+@app.get("/api/trending")
+async def trending(
+    media_type: str = Query("movie", pattern="^(movie|tv|all)$"),
+    time_window: str = Query("week", pattern="^(day|week)$"),
+    page: int = Query(1, ge=1, le=500),
+) -> dict:
+    """Trending shelf: /api/trending (movies this week by default)."""
+    return await tmdb.tmdb(f"/trending/{media_type}/{time_window}", {"page": page})
+
+
+@app.get("/api/discover/{media_type}")
+async def discover(media_type: str, request: Request) -> dict:
+    """TMDB discover for {movie|tv}: forwards a whitelisted param subset.
+
+    Enables genre/keyword shelves like 'Action & Adventure' (28,12), 'Comedy'
+    (35) or 'Anime' (keyword 210024) straight from the client.
+    """
+    if media_type not in {"movie", "tv"}:
+        raise HTTPException(404, f"Unknown media type: {media_type}")
+    params = {
+        key: value
+        for key, value in request.query_params.items()
+        if key in DISCOVER_ALLOWED
+    }
+    params.setdefault("sort_by", "popularity.desc")
+    return await tmdb.tmdb(f"/discover/{media_type}", params)
+
+
 @app.get("/api/movie/{movie_id}/detail")
 async def movie_detail(movie_id: int) -> dict:
     """Full movie detail: info + credits + similar."""
@@ -73,6 +105,14 @@ async def tv_detail(tv_id: int) -> dict:
     detail["credits"] = await tmdb.tmdb(f"/tv/{tv_id}/credits")
     detail["similar"] = await tmdb.tmdb(f"/tv/{tv_id}/similar")
     return detail
+
+
+@app.get("/api/tv/{tv_id}/season/{season}")
+async def tv_season(tv_id: int, season: int) -> dict:
+    """Episodes for one season of a TV show/anime.
+    Enables season/episode picking in the player.
+    """
+    return await tmdb.tmdb(f"/tv/{tv_id}/season/{season}")
 
 
 @app.get("/api/search")
@@ -93,10 +133,22 @@ async def genres() -> dict:
 
 @app.get("/api/stream")
 async def get_stream(
-    tmdb_id: int, title: str = "", year: str = ""
+    tmdb_id: int,
+    title: str = "",
+    year: str = "",
+    media_type: str = Query("movie", pattern="^(movie|tv)$"),
+    season: int | None = Query(None, ge=1),
+    episode: int | None = Query(None, ge=1),
 ) -> dict:
-    """Resolve a lawful, freely-streamable video source (HLS or MP4)."""
-    result = await streams.resolve(tmdb_id, title or None, year or None)
+    """Resolve embed servers (WFS + VidLink) for a movie or TV title."""
+    result = await streams.resolve(
+        tmdb_id,
+        title or None,
+        year or None,
+        media_type,
+        season,
+        episode,
+    )
     if "error" in result:
         raise HTTPException(404, result["error"])
     return result
