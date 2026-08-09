@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { getMovieDetail, getTvDetail, getTvSeason, getStream } from '../api'
 import useFetch from '../hooks/useFetch'
+import FilterSelect from '../components/FilterSelect'
 import VideoPlayer from '../components/VideoPlayer'
 
 // Plays movies and TV shows (series + anime) via embed servers.
@@ -142,38 +143,29 @@ function TvPlayer({ tmdbId }) {
 
       <h2 className="player-title">{title}</h2>
 
-      <div className="player-selects">
-        <label>
-          <span>Season</span>
-          <select
-            value={activeSeason ?? ''}
-            onChange={(e) => {
-              setSeasonNum(Number(e.target.value))
-              setEpisodeNum(null) // start from episode 1 of the new season
-            }}
-          >
-            {seasons.map((s) => (
-              <option key={s.season_number} value={s.season_number}>
-                {s.name || `Season ${s.season_number}`}
-              </option>
-            ))}
-          </select>
-        </label>
+      <div className="player-selectors">
+        <FilterSelect
+          label="Season"
+          value={activeSeason ? String(activeSeason) : ''}
+          onChange={(val) => {
+            setSeasonNum(val ? Number(val) : null)
+            setEpisodeNum(null)
+          }}
+          options={seasons.map((s) => ({
+            value: String(s.season_number),
+            label: s.name || `Season ${s.season_number}`,
+          }))}
+        />
 
-        <label>
-          <span>Episode</span>
-          <select
-            value={activeEpisode ?? ''}
-            onChange={(e) => setEpisodeNum(Number(e.target.value))}
-          >
-            {episodes.map((ep) => (
-              <option key={ep.id} value={ep.episode_number}>
-                {ep.episode_number}.{' '}
-                {ep.name || `Episode ${ep.episode_number}`}
-              </option>
-            ))}
-          </select>
-        </label>
+        <FilterSelect
+          label="Episode"
+          value={activeEpisode ? String(activeEpisode) : ''}
+          onChange={(val) => setEpisodeNum(val ? Number(val) : null)}
+          options={episodes.map((ep) => ({
+            value: String(ep.episode_number),
+            label: `${ep.episode_number}. ${ep.name || `Episode ${ep.episode_number}`}`,
+          }))}
+        />
       </div>
 
       <p className="player-sub">
