@@ -52,6 +52,13 @@ export const getTvSeason = (id, season) =>
 export const searchMulti = (q, page = 1) =>
   getJSON(`/api/search?q=${encodeURIComponent(q)}&page=${page}`)
 
+// TV-only search for the Series page.
+export const searchTv = (q, page = 1) =>
+  getJSON(`/api/search/tv?q=${encodeURIComponent(q)}&page=${page}`)
+
+// Movie + TV genre lists for filter dropdowns.
+export const getGenres = () => getJSON('/api/genres')
+
 // Resolve the embed servers (WFS + VidLink) for a movie or TV title.
 // TV shows pass season + episode so each provider gets the right URL.
 export const getStream = ({ tmdbId, title, year, mediaType, season, episode }) => {

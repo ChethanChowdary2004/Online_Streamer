@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom'
 import { imageUrl } from '../api'
 
-// A poster card for a movie or TV show. Tiles through to the detail page.
 export default function MovieCard({ item, type }) {
   const mediaType = type || item.media_type || 'movie'
   const id = item.id
@@ -13,7 +12,7 @@ export default function MovieCard({ item, type }) {
 
   return (
     <div className="card">
-      <Link to={to}>
+      <Link to={to} className="card-poster">
         {poster ? (
           <img src={poster} alt={title} loading="lazy" />
         ) : (

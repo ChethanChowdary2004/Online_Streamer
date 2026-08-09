@@ -1,32 +1,40 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 
-export default function Navbar() {
-  const [query, setQuery] = useState('')
-  const navigate = useNavigate()
+export default function Navbar({ isOpen, onClose }) {
+  const location = useLocation()
 
-  const submit = (e) => {
-    e.preventDefault()
-    const q = query.trim()
-    if (q) navigate(`/search?q=${encodeURIComponent(q)}`)
-  }
+  const isHomePage = location.pathname === '/'
+  const isSeriesPage = location.pathname === '/series'
 
   return (
-    <header className="navbar">
-      <Link to="/" className="navbar-brand">
-        Stream<span>Hub</span>
-      </Link>
-      <nav className="nav-links">
-        <Link to="/">Home</Link>
-      </nav>
-      <form className="navbar-search" onSubmit={submit}>
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search movies & shows…"
-          aria-label="Search"
+    <>
+      {/* Overlay for mobile */}
+      {isOpen && (
+        <div
+          className="nav-overlay"
+          onClick={onClose}
         />
-      </form>
-    </header>
+      )}
+
+      {/* Sidebar Navigation */}
+      <nav className={`nav-sidebar ${isOpen ? 'open' : ''}`}>
+        <Link
+          to="/"
+          className={`nav-item ${isHomePage ? 'active' : ''}`}
+          onClick={onClose}
+        >
+          <span className="nav-item-dot"></span>
+          <span>Home</span>
+        </Link>
+        <Link
+          to="/series"
+          className={`nav-item ${isSeriesPage ? 'active' : ''}`}
+          onClick={onClose}
+        >
+          <span className="nav-item-dot"></span>
+          <span>Series</span>
+        </Link>
+      </nav>
+    </>
   )
 }

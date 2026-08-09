@@ -121,6 +121,7 @@ async def _playable_file(identifier: str) -> dict | None:
 # through) them.
 WFS_BASE = "https://embed.wfs.lol/embed"
 VIDLINK_BASE = "https://vidlink.pro"
+VIDEASY_BASE = "https://player.videasy.net"
 
 
 def _build_servers(
@@ -131,8 +132,9 @@ def _build_servers(
 ) -> list[dict]:
     """Return the embed-server list for a title.
 
-    Movies -> /embed/movie/{id} (WFS) and /movie/{id} (VidLink).
-    TV/anime -> /embed/tv/{id}/{s}/{e} (WFS) and /tv/{id}/{s}/{e} (VidLink).
+    Movies -> /embed/movie/{id} (WFS), /movie/{id} (VidLink), /movie/{id} (VIDEASY).
+    TV/anime -> /embed/tv/{id}/{s}/{e} (WFS), /tv/{id}/{s}/{e} (VidLink),
+                /tv/{id}/{s}/{e} (VIDEASY).
     """
     if media_type == "tv" and season and episode:
         return [
@@ -146,6 +148,11 @@ def _build_servers(
                 "name": "VidLink",
                 "embedUrl": f"{VIDLINK_BASE}/tv/{tmdb_id}/{season}/{episode}",
             },
+            {
+                "id": "videasy",
+                "name": "VIDEASY",
+                "embedUrl": f"{VIDEASY_BASE}/tv/{tmdb_id}/{season}/{episode}",
+            },
         ]
     return [
         {
@@ -157,6 +164,11 @@ def _build_servers(
             "id": "vidlink",
             "name": "VidLink",
             "embedUrl": f"{VIDLINK_BASE}/movie/{tmdb_id}",
+        },
+        {
+            "id": "videasy",
+            "name": "VIDEASY",
+            "embedUrl": f"{VIDEASY_BASE}/movie/{tmdb_id}",
         },
     ]
 

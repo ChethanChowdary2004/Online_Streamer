@@ -37,7 +37,14 @@ TV_LISTS = {"popular", "top_rated", "airing_today", "on_the_air"}
 
 # Query params the home page is allowed to forward to the TMDB discover
 # endpoint (genre/keyword shelves). Anything else is dropped.
-DISCOVER_ALLOWED = {"with_genres", "with_keywords", "sort_by", "vote_count.gte"}
+DISCOVER_ALLOWED = {
+    "with_genres",
+    "with_keywords",
+    "sort_by",
+    "vote_count.gte",
+    "with_original_language",
+    "page",
+}
 
 
 @app.get("/api/health")
@@ -121,6 +128,12 @@ async def search(
 ) -> dict:
     """Multi-type search (movies + TV)."""
     return await tmdb.tmdb("/search/multi", {"query": q, "page": page})
+
+
+@app.get("/api/search/tv")
+async def search_tv(q: str = Query(..., min_length=1), page: int = Query(1, ge=1)) -> dict:
+    """TV-only search for the Series page."""
+    return await tmdb.tmdb("/search/tv", {"query": q, "page": page})
 
 
 @app.get("/api/genres")
