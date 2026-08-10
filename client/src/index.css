@@ -1268,23 +1268,28 @@ button {
   color: #fff;
 }
 
-/* ---------- Pause overlay (title + poster + description) ---------- */
+/* ---------- Info overlay (text only, left; eased entrance) ---------- */
 .vp-overlay {
   position: absolute;
   inset: 0;
   z-index: 5;
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: var(--space-6);
+  justify-content: flex-start;
+  padding: var(--space-6) var(--space-8);
   background: linear-gradient(
     to bottom,
-    rgba(0, 0, 0, 0.82),
-    rgba(10, 10, 10, 0.86) 85%
+    rgba(10, 10, 10, 0.3) 0%,
+    rgba(10, 10, 10, 0.16) 50%,
+    rgba(10, 10, 10, 0.55) 100%
   );
-  backdrop-filter: blur(3px);
-  pointer-events: none;
-  animation: vp-overlay-in 0.35s var(--ease);
+  /* Click-to-dismiss: the embed is sealed so the "resume" click can't be seen
+   from outside, so while the overlay is up any click over the player closes it.
+   `pointer-events` flips to auto so clicks land on the overlay instead of going
+   straight into the iframe. */
+  pointer-events: auto;
+  cursor: pointer;
+  animation: vp-overlay-in 0.45s ease-in both;
 }
 
 @keyframes vp-overlay-in {
@@ -1296,48 +1301,63 @@ button {
   }
 }
 
-.vp-overlay-card {
-  display: flex;
-  gap: var(--space-5);
-  align-items: center;
-  max-width: 760px;
-  width: 100%;
+/* Left-side scrim keeps the text legible over the video. */
+.vp-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to right,
+    rgba(0, 0, 0, 0.6) 0%,
+    rgba(0, 0, 0, 0.2) 45%,
+    transparent 70%
+  );
 }
 
-.vp-overlay-poster {
-  width: 150px;
-  flex-shrink: 0;
-  aspect-ratio: 2 / 3;
-  object-fit: cover;
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-pop);
+.vp-overlay-content {
+  position: relative;
+  z-index: 1;
+  max-width: 58%;
+  text-align: left;
+  animation: vp-overlay-content-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.vp-overlay-body {
-  min-width: 0;
+@keyframes vp-overlay-content-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .vp-overlay-eyebrow {
   display: inline-block;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--accent);
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--space-3);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
 }
 
 .vp-overlay-title {
   font-family: var(--font-display);
   font-weight: 400;
-  font-size: 30px;
+  font-size: clamp(26px, 4.5vw, 44px);
+  line-height: 1.05;
+  letter-spacing: 0.3px;
   margin: 0 0 var(--space-3);
   color: #fff;
+  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
 }
 
 .vp-overlay-desc {
-  color: rgba(255, 255, 255, 0.75);
-  font-size: 14px;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 16px;
   line-height: 1.6;
   margin: 0;
 }
@@ -1907,24 +1927,19 @@ button {
 
   .vp-overlay {
     padding: var(--space-4);
-    align-items: flex-end;
   }
 
-  .vp-overlay-card {
-    gap: var(--space-3);
-  }
-
-  .vp-overlay-poster {
-    width: 86px;
+  .vp-overlay-content {
+    max-width: 82%;
   }
 
   .vp-overlay-title {
-    font-size: 20px;
+    font-size: 24px;
     margin-bottom: var(--space-2);
   }
 
   .vp-overlay-desc {
-    font-size: 12px;
+    font-size: 13px;
     line-clamp: 3;
     -webkit-line-clamp: 3;
     display: -webkit-box;

@@ -37,9 +37,8 @@ export default function VideoPlayer({
   season,
   episode,
   anilistId,
-  // Pause-overlay content
+  // Overlay content
   title,
-  poster,
   description,
   // Controls row (series/anime only)
   seasonOptions,
@@ -70,6 +69,10 @@ export default function VideoPlayer({
   //      postMessage (best-effort free win).
   const [overlayOpen, setOverlayOpen] = useState(false)
   const autoTimer = useRef(null)
+  // After the user dismisses the overlay (they're resuming), clicking back into
+  // the player blurs this window again — suppress that blur for a beat so the
+  // overlay doesn't instantly re-pop over a now-playing video.
+  const suppressBlurUntil = useRef(0)
 
   const openOverlay = useCallback(() => setOverlayOpen(true), [])
 
@@ -92,6 +95,14 @@ export default function VideoPlayer({
   const toggleOverlay = () => {
     if (autoTimer.current) clearTimeout(autoTimer.current)
     setOverlayOpen((o) => !o)
+  }
+
+  // Click-to-dismiss: the embed is sealed so we can't detect the actual
+  // "resume" click inside it — the next click on the player closes the overlay
+  // instead (and that's almost always the resume click).
+  const dismissOverlay = () => {
+    suppressBlurUntil.current = Date.now() + 2500
+    closeOverlay()
   }
 
   // single-serving fallback for pages that don't hand us a servers list
@@ -146,10 +157,18 @@ export default function VideoPlayer({
 
   // Smart-ish heuristic: clicking inside a cross-origin iframe moves focus out
   // of our window (blur) — which is exactly when someone pauses. Open the
-  // overlay ~2s later; coming back (focus) closes it.
+  // overlay ~2s later; coming back (focus) closes it. A blur arriving right
+  // after a click-to-dismiss (i.e. the resume click, which also blurs us) is
+  // suppressed so the overlay doesn't re-pop over a now-playing video.
   useEffect(() => {
-    const onBlur = () => scheduleAuto(true)
-    const onFocus = () => scheduleAuto(false)
+    const onBlur = () => {
+      if (Date.now() < suppressBlurUntil.current) return
+      scheduleAuto(true)
+    }
+    const onFocus = () => {
+      suppressBlurUntil.current = Date.now() + 2500
+      scheduleAuto(false)
+    }
     window.addEventListener('blur', onBlur)
     window.addEventListener('focus', onFocus)
     return () => {
@@ -278,18 +297,21 @@ export default function VideoPlayer({
           </div>
         )}
 
-        {/* Info overlay: title + poster + description. Opened manually via the
-            ⓘ Info button, or automatically a couple of seconds after a
-            pause-like signal. */}
+        {/* Info overlay — hero-banner style: the poster becomes a dimmed full-bleed
+            backdrop, and the "Now Playing" label + title + description sit on
+            the right side of the player. Opened manually via the ⓘ Info
+            button, or automatically after a pause-like signal. */}
         {title && overlayOpen && (
-          <div className="vp-overlay">
-            <div className="vp-overlay-card">
-              {poster && <img className="vp-overlay-poster" src={poster} alt={title} />}
-              <div className="vp-overlay-body">
-                <span className="vp-overlay-eyebrow">Now Playing</span>
-                <h3 className="vp-overlay-title">{title}</h3>
-                {cleanDesc && <p className="vp-overlay-desc">{cleanDesc}</p>}
-              </div>
+          <div
+            className="vp-overlay"
+            onClick={dismissOverlay}
+            role="button"
+            aria-label="Dismiss title & description"
+          >
+            <div className="vp-overlay-content">
+              <span className="vp-overlay-eyebrow">Now Playing</span>
+              <h3 className="vp-overlay-title">{title}</h3>
+              {cleanDesc && <p className="vp-overlay-desc">{cleanDesc}</p>}
             </div>
           </div>
         )}

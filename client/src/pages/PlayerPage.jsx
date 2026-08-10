@@ -8,7 +8,6 @@ import {
   getAnimeDetail,
   searchTv,
   animeEmbed,
-  imageUrl,
 } from '../api'
 import useFetch from '../hooks/useFetch'
 import VideoPlayer from '../components/VideoPlayer'
@@ -57,7 +56,6 @@ function MoviePlayer({ tmdbId }) {
       title,
       year,
       servers: res.servers || [],
-      poster: imageUrl(d.poster_path),
       overview: d.overview || '',
       similar: (d.similar && d.similar.results) || [],
     }
@@ -83,7 +81,6 @@ function MoviePlayer({ tmdbId }) {
         mediaType="movie"
         servers={data.servers}
         title={data.title}
-        poster={data.poster}
         description={data.overview}
       />
       <MovieRow title="Similar Movies" items={data.similar} type="movie" />
@@ -142,7 +139,6 @@ function TvPlayer({ tmdbId, anilistId, animeRelations }) {
   }
 
   const title = tv.name || 'This series'
-  const poster = imageUrl(tv.poster_path)
   const overview = tv.overview || ''
 
   const seasonOptions = seasons.map((s) => ({
@@ -193,7 +189,6 @@ function TvPlayer({ tmdbId, anilistId, animeRelations }) {
             servers={servers}
             anilistId={anilistId}
             title={title}
-            poster={poster}
             description={overview}
             seasonOptions={seasonOptions}
             episodeOptions={episodeOptions}
@@ -336,7 +331,6 @@ function AnimeEmbedOnly({ anilistId }) {
       <VideoPlayer
         servers={servers}
         title={title}
-        poster={media.coverImage?.large}
         description={media.description || ''}
         episode={isMovie ? null : activeEpisode}
         episodeOptions={showPicker ? episodeOptions : []}
