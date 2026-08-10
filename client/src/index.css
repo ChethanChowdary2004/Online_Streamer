@@ -433,6 +433,34 @@ button {
   border-radius: 4px;
 }
 
+/* ---------- Anime top-bar search + genre filter ----------
+   On the anime page the search box and genre dropdown live in the sticky
+   top bar (not on the page), replacing the global search. The input reuses
+   the navbar pill; the FilterSelect is overridden to sit inline. */
+.anime-search {
+  gap: var(--space-3);
+}
+
+.anime-search input {
+  width: 220px;
+}
+
+.anime-search .filter-group {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.anime-search .filter-label {
+  margin: 0;
+}
+
+.anime-search .filter-dropdown-button {
+  min-width: 130px;
+  max-width: 170px;
+  padding: 8px 12px;
+}
+
 /* ---------- Buttons ---------- */
 .btn {
   display: inline-flex;
@@ -1801,6 +1829,17 @@ button {
 
   .navbar-brand {
     font-size: 22px;
+  }
+
+  .anime-search {
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
+
+  .anime-search input {
+    flex: 1;
+    width: auto;
+    min-width: 120px;
   }
 
   .nav-links {

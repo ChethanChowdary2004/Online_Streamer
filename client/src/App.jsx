@@ -14,6 +14,11 @@ import PlayerPage from './pages/PlayerPage'
 export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
+  // The anime page's search + genre filter live in the top bar, so their state
+  // is owned here and shared by the Topbar (inputs) and AnimePage (browsing).
+  const [animeQuery, setAnimeQuery] = useState('')
+  const [animeGenre, setAnimeGenre] = useState('')
+
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen)
   }
@@ -24,13 +29,22 @@ export default function App() {
 
   return (
     <>
-      <Topbar onToggleSidebar={toggleSidebar} />
+      <Topbar
+        onToggleSidebar={toggleSidebar}
+        animeQuery={animeQuery}
+        onAnimeQuery={setAnimeQuery}
+        animeGenre={animeGenre}
+        onAnimeGenre={setAnimeGenre}
+      />
       <Navbar isOpen={sidebarOpen} onClose={closeSidebar} />
       <main>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/series" element={<Series />} />
-          <Route path="/anime" element={<AnimePage />} />
+          <Route
+            path="/anime"
+            element={<AnimePage query={animeQuery} genre={animeGenre} />}
+          />
           <Route path="/anime/:id" element={<AnimeDetail />} />
           <Route path="/search" element={<Search />} />
           <Route path="/movie/:id" element={<MovieDetail />} />

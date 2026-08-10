@@ -3,26 +3,20 @@ import {
   searchAnime,
   getAnimeGenre,
   getAnimeList,
-  getAnimeGenres,
   animeMedia,
 } from '../api'
 import useFetch from '../hooks/useFetch'
-import AnimeTopbar from '../components/AnimeTopbar'
 import AnimeHeroBanner from '../components/AnimeHeroBanner'
 import AnimeRow from '../components/AnimeRow'
 import AnimeCard from '../components/AnimeCard'
 
-export default function AnimePage() {
-  const [query, setQuery] = useState('')
-  const [genre, setGenre] = useState('')
-
+// The anime search + genre filter live in the top bar (Topbar), not on this
+// page — App owns that state and passes it in here to drive browsing.
+export default function AnimePage({ query, genre }) {
   const [page, setPage] = useState(1)
   const [items, setItems] = useState([])
   const [hasMore, setHasMore] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
-
-  const genresFetch = useFetch(() => getAnimeGenres(), [])
-  const genreList = genresFetch.data?.GenreCollection || []
 
   const queryTrim = query.trim()
   const browsing = Boolean(queryTrim || genre)
@@ -69,17 +63,9 @@ export default function AnimePage() {
   }
 
   return (
-    <div className="series-page">
-      <AnimeTopbar
-        query={query}
-        onQuery={setQuery}
-        genre={genre}
-        onGenre={setGenre}
-        genreList={genreList}
-      />
-
+    <>
       {browsing ? (
-        <>
+        <div className="series-page">
           {browse.loading && <div className="spinner" />}
           {browse.error && (
             <div className="error-box">Failed to load anime: {browse.error.message}</div>
@@ -109,22 +95,26 @@ export default function AnimePage() {
               </div>
             </>
           )}
-        </>
+        </div>
       ) : (
         <>
           {trending.loading ? (
             <div className="spinner" />
           ) : (
             <>
+              {/* Hero sits at the very top like the Home hero: full-width, pulled
+                  up under the sticky navbar by the base .hero -70px margin. */}
               <AnimeHeroBanner items={heroMedia} />
-              <AnimeRow title="Top Rated Anime" items={animeMedia(topRated.data)} />
-              <AnimeRow title="Top Rated Anime Movies" items={animeMedia(movies.data)} />
-              <AnimeRow title="Trending Top 10" items={trendingMedia} />
-              <AnimeRow title="Latest Anime" items={animeMedia(latest.data)} />
+              <div className="series-page">
+                <AnimeRow title="Top Rated Anime" items={animeMedia(topRated.data)} />
+                <AnimeRow title="Top Rated Anime Movies" items={animeMedia(movies.data)} />
+                <AnimeRow title="Trending Top 10" items={trendingMedia} />
+                <AnimeRow title="Latest Anime" items={animeMedia(latest.data)} />
+              </div>
             </>
           )}
         </>
       )}
-    </div>
+    </>
   )
 }
