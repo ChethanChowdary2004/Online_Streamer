@@ -4,6 +4,8 @@ import Topbar from './components/Topbar'
 import Navbar from './components/Navbar'
 import Home from './pages/Home'
 import Series from './pages/Series'
+import AnimePage from './pages/AnimePage'
+import AnimeDetail from './pages/AnimeDetail'
 import Search from './pages/Search'
 import MovieDetail from './pages/MovieDetail'
 import TvDetail from './pages/TvDetail'
@@ -28,6 +30,8 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/series" element={<Series />} />
+          <Route path="/anime" element={<AnimePage />} />
+          <Route path="/anime/:id" element={<AnimeDetail />} />
           <Route path="/search" element={<Search />} />
           <Route path="/movie/:id" element={<MovieDetail />} />
           <Route path="/tv/:id" element={<TvDetail />} />

@@ -12,7 +12,10 @@ export default function Topbar({ onToggleSidebar }) {
     if (q) navigate(`/search?q=${encodeURIComponent(q)}`)
   }
 
-  const isSeriesPage = location.pathname === '/series'
+  // Page-level toolbars replace the global search on these routes (Series has
+  // its own search + filters, Anime has a search + genre filter).
+  const isBrowsedPage =
+    location.pathname === '/series' || location.pathname === '/anime'
 
   return (
     <header className="navbar">
@@ -30,7 +33,7 @@ export default function Topbar({ onToggleSidebar }) {
         <img src="/yugostream_title_transparent.png" alt="YUGOSTREAM" className="navbar-brand-image" />
       </Link>
 
-      {!isSeriesPage && (
+      {!isBrowsedPage && (
         <form className="navbar-search" onSubmit={submit}>
           <input
             value={query}

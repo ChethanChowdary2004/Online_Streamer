@@ -1155,6 +1155,44 @@ button {
   color: #fff;
 }
 
+/* VIDEASY TMDB/AniList source toggle (anime only) */
+.videasy-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.videasy-toggle-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-right: var(--space-1);
+}
+
+.videasy-toggle button {
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 16px;
+  border-radius: 999px;
+  transition: background var(--fast) var(--ease), border-color var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+
+.videasy-toggle button:hover {
+  border-color: var(--accent);
+}
+
+.videasy-toggle button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 /* ---------- Series page ---------- */
 .series-page {
   padding: var(--space-6) var(--space-10) 60px;

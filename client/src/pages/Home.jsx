@@ -4,21 +4,15 @@ import {
   getMovieList,
   getTvList,
   discoverMovies,
-  discoverTv,
 } from '../api'
 import useFetch from '../hooks/useFetch'
 import HeroBanner from '../components/HeroBanner'
 import MovieRow from '../components/MovieRow'
 
-// Anime is a keyword shelf on TMDB (there is no "anime" genre), so it goes
-// through the discover endpoint rather than a plain list.
-const ANIME_KEYWORD = 210024
-
 export default function Home() {
   const trending = useFetch(() => getTrending())
   const popularMovies = useFetch(() => getMovieList('popular'))
   const popularSeries = useFetch(() => getTvList('popular'))
-  const popularAnime = useFetch(() => discoverTv({ with_keywords: ANIME_KEYWORD }))
   const topRatedMovies = useFetch(() => getMovieList('top_rated'))
   const actionAdventure = useFetch(() => discoverMovies({ with_genres: '28,12' }))
   const comedy = useFetch(() => discoverMovies({ with_genres: '35' }))
@@ -41,7 +35,6 @@ export default function Home() {
   const rows = [
     { title: 'Popular Movies', list: popularMovies, type: 'movie' },
     { title: 'Popular Series', list: popularSeries, type: 'tv' },
-    { title: 'Popular Anime', list: popularAnime, type: 'tv' },
     { title: 'Top Rated Movies', list: topRatedMovies, type: 'movie' },
     { title: 'Action & Adventure', list: actionAdventure, type: 'movie' },
     { title: 'Comedy', list: comedy, type: 'movie' },

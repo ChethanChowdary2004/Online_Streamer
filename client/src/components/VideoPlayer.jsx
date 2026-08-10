@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { animeEmbed } from '../api'
 
 // Embed player with a server bar below it.
 //
@@ -12,6 +13,10 @@ import { useState } from 'react'
 // mediaType/tmdbId/season/episode, so callers that don't fetch servers still
 // work. Note: cross-origin iframes only fire error events for hard load
 // failures, so auto-fallback is best-effort.
+//
+// Anime-only: when `anilistId` is provided, VIDEASY can play a title from
+// either its TMDB id (the stream server URL) or its AniList id. A small
+// TMDB/AniList toggle appears under the server bar so the user can switch.
 
 export default function VideoPlayer({
   servers,
@@ -19,12 +24,14 @@ export default function VideoPlayer({
   tmdbId,
   season,
   episode,
+  anilistId,
 }) {
   const [autoMode, setAutoMode] = useState(true)
   const [attempt, setAttempt] = useState(0)
   const [pinned, setPinned] = useState(null)
   const [lastError, setLastError] = useState(false)
   const [retryKey, setRetryKey] = useState(0)
+  const [videasyAnilist, setVideasyAnilist] = useState(false)
 
   // single-serving fallback for pages that don't hand us a servers list
   let fallback = ''
@@ -41,7 +48,23 @@ export default function VideoPlayer({
     ? list[Math.min(attempt, list.length - 1)]
     : list.find((s) => s.id === pinned) || null
 
-  const embedUrl = active ? active.embedUrl : ''
+  // Anime-only: VIDEASY can play from either the TMDB id (the stream server's
+  // URL) or the AniList id. `isVideasyActive` gates the toggle, and the
+  // override swaps the embed URL when the user has flipped to AniList.
+  const isVideasyActive = Boolean(active && active.id === 'videasy')
+  const anilistUrl = anilistId ? animeEmbed(anilistId, episode) : ''
+  const embedUrl =
+    isVideasyActive && videasyAnilist && anilistUrl
+      ? anilistUrl
+      : active
+        ? active.embedUrl
+        : ''
+
+  const setVideasyMode = (mode) => {
+    setVideasyAnilist(mode === 'anilist')
+    setLastError(false)
+    setRetryKey((k) => k + 1)
+  }
 
   const retry = () => {
     setLastError(false)
@@ -151,6 +174,25 @@ export default function VideoPlayer({
             </button>
           ))}
         </div>
+        {anilistId && isVideasyActive && (
+          <div className="videasy-toggle">
+            <span className="videasy-toggle-label">Source</span>
+            <button
+              type="button"
+              className={!videasyAnilist ? 'active' : ''}
+              onClick={() => setVideasyMode('tmdb')}
+            >
+              TMDB
+            </button>
+            <button
+              type="button"
+              className={videasyAnilist ? 'active' : ''}
+              onClick={() => setVideasyMode('anilist')}
+            >
+              AniList
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
