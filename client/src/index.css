@@ -1193,6 +1193,155 @@ button {
   color: #fff;
 }
 
+/* ---------- Player controls row (season/episode/server + prev/next) ---------- */
+.player-controls {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin: 14px 4px 0;
+  flex-wrap: wrap;
+}
+
+.player-controls-left {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.player-controls-right {
+  display: flex;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.player-controls .filter-group {
+  gap: var(--space-2);
+}
+
+.player-controls .filter-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.player-controls .filter-dropdown-button {
+  min-width: 150px;
+  padding: 9px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+
+.player-controls .videasy-toggle {
+  margin-top: 0;
+  padding: 0 var(--space-1);
+}
+
+.pnav-btn {
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 16px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--fast) var(--ease), border-color var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+
+.pnav-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.pnav-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pnav-btn.info-overlay-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* ---------- Pause overlay (title + poster + description) ---------- */
+.vp-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.82),
+    rgba(10, 10, 10, 0.86) 85%
+  );
+  backdrop-filter: blur(3px);
+  pointer-events: none;
+  animation: vp-overlay-in 0.35s var(--ease);
+}
+
+@keyframes vp-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.vp-overlay-card {
+  display: flex;
+  gap: var(--space-5);
+  align-items: center;
+  max-width: 760px;
+  width: 100%;
+}
+
+.vp-overlay-poster {
+  width: 150px;
+  flex-shrink: 0;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-pop);
+}
+
+.vp-overlay-body {
+  min-width: 0;
+}
+
+.vp-overlay-eyebrow {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: var(--space-2);
+}
+
+.vp-overlay-title {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 30px;
+  margin: 0 0 var(--space-3);
+  color: #fff;
+}
+
+.vp-overlay-desc {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0;
+}
+
 /* ---------- Series page ---------- */
 .series-page {
   padding: var(--space-6) var(--space-10) 60px;
@@ -1734,6 +1883,53 @@ button {
 
   .player-sub {
     font-size: 13px;
+  }
+
+  .player-controls {
+    margin-top: 10px;
+    gap: var(--space-3);
+  }
+
+  .player-controls .filter-dropdown-button {
+    min-width: 110px;
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  .player-controls-right {
+    margin-left: 0;
+  }
+
+  .pnav-btn {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .vp-overlay {
+    padding: var(--space-4);
+    align-items: flex-end;
+  }
+
+  .vp-overlay-card {
+    gap: var(--space-3);
+  }
+
+  .vp-overlay-poster {
+    width: 86px;
+  }
+
+  .vp-overlay-title {
+    font-size: 20px;
+    margin-bottom: var(--space-2);
+  }
+
+  .vp-overlay-desc {
+    font-size: 12px;
+    line-clamp: 3;
+    -webkit-line-clamp: 3;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   .search-page h2 {

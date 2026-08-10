@@ -8,10 +8,12 @@ import {
   getAnimeDetail,
   searchTv,
   animeEmbed,
+  imageUrl,
 } from '../api'
 import useFetch from '../hooks/useFetch'
-import FilterSelect from '../components/FilterSelect'
 import VideoPlayer from '../components/VideoPlayer'
+import MovieRow from '../components/MovieRow'
+import AnimeRow from '../components/AnimeRow'
 import { animeTitle } from '../components/AnimeCard'
 
 // Plays everything through VideoPlayer.
@@ -19,11 +21,15 @@ import { animeTitle } from '../components/AnimeCard'
 //   /watch/tv/:id     -> TvPlayer     (season + episode, served per episode)
 //   /watch/anime/:id  -> AnimePlayer  (AniList ID resolves a TMDB id, then TV)
 //
-// Movie/Tv resolve their server list on the backend. Anime only knows its
-// AniList ID, so AnimePlayer finds the matching TMDB show by title and reuses
-// the TV flow — this gives anime the full server list + season/episode
-// pickers. VIDEASY additionally gets a TMDB/AniList toggle (in VideoPlayer) so
-// the same title can be played from either id.
+// The player block owns the controls row (Season/Episode/Server dropdowns +
+// Prev/Next), the pause overlay (title/poster/description), and the servers.
+// This page just feeds it the data and renders any similar/related shelves
+// below the player.
+//
+// Anime only knows its AniList ID, so AnimePlayer finds the matching TMDB show
+// by title and reuses the TV flow — this gives anime the full server list +
+// season/episode pickers. VIDEASY additionally gets a TMDB/AniList toggle (in
+// VideoPlayer) so the same title can be played from either id.
 
 export default function PlayerPage() {
   const { type, id } = useParams()
@@ -42,21 +48,20 @@ export default function PlayerPage() {
 
 // ---- Movies ----
 function MoviePlayer({ tmdbId }) {
-  const { data, error, loading } = useFetch(
-    () =>
-      getMovieDetail(tmdbId).then((d) => {
-        const title = d.title || 'This title'
-        const year = (d.release_date || '').slice(0, 4)
-        return getStream({ tmdbId, title, year, mediaType: 'movie' }).then(
-          (res) => ({
-            title,
-            year,
-            servers: res.servers || [],
-          }),
-        )
-      }),
-    [tmdbId],
-  )
+  const { data, error, loading } = useFetch(async () => {
+    const d = await getMovieDetail(tmdbId)
+    const title = d.title || 'This title'
+    const year = (d.release_date || '').slice(0, 4)
+    const res = await getStream({ tmdbId, title, year, mediaType: 'movie' })
+    return {
+      title,
+      year,
+      servers: res.servers || [],
+      poster: imageUrl(d.poster_path),
+      overview: d.overview || '',
+      similar: (d.similar && d.similar.results) || [],
+    }
+  }, [tmdbId])
 
   if (loading) return <div className="player-loading">Loading stream…</div>
 
@@ -73,15 +78,23 @@ function MoviePlayer({ tmdbId }) {
 
   return (
     <div className="player-page">
-      <VideoPlayer tmdbId={tmdbId} mediaType="movie" servers={data.servers} />
-      <h2 className="player-title">{data.title}</h2>
-      <p className="player-sub">{data.year}</p>
+      <VideoPlayer
+        tmdbId={tmdbId}
+        mediaType="movie"
+        servers={data.servers}
+        title={data.title}
+        poster={data.poster}
+        description={data.overview}
+      />
+      <MovieRow title="Similar Movies" items={data.similar} type="movie" />
     </div>
   )
 }
 
 // ---- TV shows (anime delegates here after resolving its TMDB id) ----
-function TvPlayer({ tmdbId, anilistId }) {
+// `animeRelations` (from AniList) overrides the "Similar" shelf with related
+// anime when this route was reached from the anime page.
+function TvPlayer({ tmdbId, anilistId, animeRelations }) {
   const { data: tv, error, loading } = useFetch(() => getTvDetail(tmdbId), [
     tmdbId,
   ])
@@ -129,8 +142,42 @@ function TvPlayer({ tmdbId, anilistId }) {
   }
 
   const title = tv.name || 'This series'
-  const year = (tv.first_air_date || '').slice(0, 4)
-  const activeSeasonInfo = seasons.find((s) => s.season_number === activeSeason)
+  const poster = imageUrl(tv.poster_path)
+  const overview = tv.overview || ''
+
+  const seasonOptions = seasons.map((s) => ({
+    value: String(s.season_number),
+    label: s.name || `Season ${s.season_number}`,
+  }))
+  const episodeOptions = episodes.map((ep) => ({
+    value: String(ep.episode_number),
+    label: `${ep.episode_number}. ${ep.name || `Episode ${ep.episode_number}`}`,
+  }))
+
+  // Prev/Next within the current season; Next rolls to the following season
+  // when the current one is exhausted.
+  const lastEpisode = episodes[episodes.length - 1]?.episode_number ?? activeEpisode
+  const nextSeason = seasons.find((s) => s.season_number === activeSeason + 1)
+  const canPrev = activeEpisode > 1
+  const canNext = activeEpisode < lastEpisode || Boolean(nextSeason)
+
+  const goPrev = () => {
+    if (canPrev) setEpisodeNum(activeEpisode - 1)
+  }
+
+  const goNext = () => {
+    if (activeEpisode < lastEpisode) {
+      setEpisodeNum(activeEpisode + 1)
+    } else if (nextSeason) {
+      setSeasonNum(nextSeason.season_number)
+      setEpisodeNum(null) // defaults to the next season's first episode
+    }
+  }
+
+  const changeSeason = (val) => {
+    setSeasonNum(val)
+    setEpisodeNum(null)
+  }
 
   return (
     <div className="player-page">
@@ -145,42 +192,31 @@ function TvPlayer({ tmdbId, anilistId }) {
             episode={activeEpisode}
             servers={servers}
             anilistId={anilistId}
+            title={title}
+            poster={poster}
+            description={overview}
+            seasonOptions={seasonOptions}
+            episodeOptions={episodeOptions}
+            onSeasonChange={changeSeason}
+            onEpisodeChange={setEpisodeNum}
+            onPrev={goPrev}
+            onNext={goNext}
+            canPrev={canPrev}
+            canNext={canNext}
           />
         ))}
 
-      <h2 className="player-title">{title}</h2>
-
-      <div className="player-selectors">
-        <FilterSelect
-          label="Season"
-          value={activeSeason ? String(activeSeason) : ''}
-          onChange={(val) => {
-            setSeasonNum(val ? Number(val) : null)
-            setEpisodeNum(null)
-          }}
-          options={seasons.map((s) => ({
-            value: String(s.season_number),
-            label: s.name || `Season ${s.season_number}`,
-          }))}
+      {/* Anime reached through the AniList flow: show related anime from
+          AniList; otherwise (or as a fallback) similar shows from TMDB. */}
+      {animeRelations && animeRelations.length ? (
+        <AnimeRow title="Related Anime" items={animeRelations} />
+      ) : (
+        <MovieRow
+          title="Similar Series"
+          items={(tv.similar && tv.similar.results) || []}
+          type="tv"
         />
-
-        <FilterSelect
-          label="Episode"
-          value={activeEpisode ? String(activeEpisode) : ''}
-          onChange={(val) => setEpisodeNum(val ? Number(val) : null)}
-          options={episodes.map((ep) => ({
-            value: String(ep.episode_number),
-            label: `${ep.episode_number}. ${ep.name || `Episode ${ep.episode_number}`}`,
-          }))}
-        />
-      </div>
-
-      <p className="player-sub">
-        {title}
-        {year ? ` · ${year}` : ''}
-        {activeSeasonInfo ? ` · ${activeSeasonInfo.name}` : ''}
-        {activeEpisode ? ` · EP ${activeEpisode}` : ''}
-      </p>
+      )}
     </div>
   )
 }
@@ -196,10 +232,18 @@ function AnimePlayer({ anilistId }) {
     () =>
       getAnimeDetail(anilistId).then(async (d) => {
         const media = d?.Media
-        if (!media) return { title: null, tmdbId: null }
+        if (!media) return { title: null, tmdbId: null, relations: [] }
         const title = animeTitle(media.title)
         const search = await searchTv(title)
-        return { title, tmdbId: pickTmdbShow(search?.results, title) }
+        // Related/similar anime from AniList relations, anime-only (skip manga).
+        const relations = (media.relations?.nodes || []).filter(
+          (n) => n.type === 'ANIME',
+        )
+        return {
+          title,
+          tmdbId: pickTmdbShow(search?.results, title),
+          relations,
+        }
       }),
     [anilistId],
   )
@@ -221,7 +265,13 @@ function AnimePlayer({ anilistId }) {
     return <AnimeEmbedOnly anilistId={anilistId} />
   }
 
-  return <TvPlayer tmdbId={crossover.data.tmdbId} anilistId={anilistId} />
+  return (
+    <TvPlayer
+      tmdbId={crossover.data.tmdbId}
+      anilistId={anilistId}
+      animeRelations={crossover.data.relations}
+    />
+  )
 }
 
 // Pick the TMDB show that best matches a title. Prefers an exact-ish name
@@ -255,7 +305,6 @@ function AnimeEmbedOnly({ anilistId }) {
 
   const media = data.Media
   const title = animeTitle(media.title)
-  const year = media.startDate?.year
   const isMovie = media.format === 'MOVIE'
   const episodeCount = media.episodes
   const activeEpisode = episode ?? 1
@@ -274,32 +323,29 @@ function AnimeEmbedOnly({ anilistId }) {
     { length: episodeCount || 0 },
     (_, i) => i + 1,
   )
+  const episodeOptions = episodeNumbers.map((n) => ({
+    value: String(n),
+    label: `Episode ${n}`,
+  }))
+
+  const canPrev = activeEpisode > 1
+  const canNext = activeEpisode < episodeCount
 
   return (
     <div className="player-page">
-      <VideoPlayer servers={servers} />
-
-      <h2 className="player-title">{title}</h2>
-
-      {showPicker && (
-        <div className="player-selectors">
-          <FilterSelect
-            label="Episode"
-            value={String(activeEpisode)}
-            onChange={(val) => setEpisode(val ? Number(val) : null)}
-            options={episodeNumbers.map((n) => ({
-              value: String(n),
-              label: `Episode ${n}`,
-            }))}
-          />
-        </div>
-      )}
-
-      <p className="player-sub">
-        {title}
-        {year ? ` · ${year}` : ''}
-        {isMovie ? ' · Anime Movie' : ` · Episode ${activeEpisode}`}
-      </p>
+      <VideoPlayer
+        servers={servers}
+        title={title}
+        poster={media.coverImage?.large}
+        description={media.description || ''}
+        episode={isMovie ? null : activeEpisode}
+        episodeOptions={showPicker ? episodeOptions : []}
+        onEpisodeChange={(val) => setEpisode(val ? Number(val) : null)}
+        onPrev={showPicker ? () => canPrev && setEpisode(activeEpisode - 1) : undefined}
+        onNext={showPicker ? () => canNext && setEpisode(activeEpisode + 1) : undefined}
+        canPrev={canPrev}
+        canNext={canNext}
+      />
     </div>
   )
 }

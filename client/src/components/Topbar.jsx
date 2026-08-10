@@ -13,9 +13,12 @@ export default function Topbar({ onToggleSidebar }) {
   }
 
   // Page-level toolbars replace the global search on these routes (Series has
-  // its own search + filters, Anime has a search + genre filter).
+  // its own search + filters, Anime has a search + genre filter). The watch
+  // page has no need for it either — everything relevant lives under the player.
   const isBrowsedPage =
-    location.pathname === '/series' || location.pathname === '/anime'
+    location.pathname === '/series' ||
+    location.pathname === '/anime' ||
+    location.pathname.startsWith('/watch')
 
   return (
     <header className="navbar">

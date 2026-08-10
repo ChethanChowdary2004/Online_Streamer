@@ -1,22 +1,34 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { animeEmbed } from '../api'
+import FilterSelect from './FilterSelect'
 
-// Embed player with a server bar below it.
+// Full player block: the embed surface + a single controls row below it.
 //
 // `servers` is the list of embed providers ({id, name, embedUrl}) returned by
 // the backend (WFS + VidLink). The player plays whichever server is active:
 //   - "Auto" (default) starts on the first server and, if that embed fails to
 //     load, falls through to the next automatically.
-//   - Clicking a named server pins it (manual mode).
+//   - Picking a named server from the dropdown pins it (manual mode).
 //
 // If no servers are passed it falls back to a single embed URL built from
 // mediaType/tmdbId/season/episode, so callers that don't fetch servers still
 // work. Note: cross-origin iframes only fire error events for hard load
 // failures, so auto-fallback is best-effort.
 //
+// Controls row (below the player): Season / Episode / Server dropdowns on the
+// left via FilterSelect, and Prev/Next episode buttons on the right. The
+// season/episode dropdowns and prev/next handlers are optional — only series
+// and anime pass them, so movies get just the server dropdown.
+//
+// Info overlay (title/poster/description over the embed): the embeds are
+// sealed cross-origin iframes, so a pause can't be reliably detected from
+// outside. The overlay opens from the "ⓘ Info" button in the controls row,
+// and smart-auto hint sources (window blur / media keys / embed postMessage)
+// open it ~2s after a pause-like signal and close it on resume.
+//
 // Anime-only: when `anilistId` is provided, VIDEASY can play a title from
 // either its TMDB id (the stream server URL) or its AniList id. A small
-// TMDB/AniList toggle appears under the server bar so the user can switch.
+// TMDB/AniList toggle appears next to the server dropdown.
 
 export default function VideoPlayer({
   servers,
@@ -25,6 +37,19 @@ export default function VideoPlayer({
   season,
   episode,
   anilistId,
+  // Pause-overlay content
+  title,
+  poster,
+  description,
+  // Controls row (series/anime only)
+  seasonOptions,
+  episodeOptions,
+  onSeasonChange,
+  onEpisodeChange,
+  onPrev,
+  onNext,
+  canPrev = false,
+  canNext = false,
 }) {
   const [autoMode, setAutoMode] = useState(true)
   const [attempt, setAttempt] = useState(0)
@@ -32,6 +57,42 @@ export default function VideoPlayer({
   const [lastError, setLastError] = useState(false)
   const [retryKey, setRetryKey] = useState(0)
   const [videasyAnilist, setVideasyAnilist] = useState(false)
+
+  // Info overlay (title/poster/description). The embeds are sealed cross-origin
+  // iframes, so there's no reliable way to detect a pause from outside — the
+  // overlay therefore opens from three sources:
+  //   1. Manual "ⓘ Info" button in the controls row — always works, on every
+  //      server.
+  //   2. Smart auto — a message hinting "paused" opens it after ~2s, and a
+  //      "resumed"/focus signal closes it. Hint sources: the parent window
+  //      losing focus (the user clicked into the player), the media-session
+  //      'pause' action (hardware media keys), or an embed reporting state via
+  //      postMessage (best-effort free win).
+  const [overlayOpen, setOverlayOpen] = useState(false)
+  const autoTimer = useRef(null)
+
+  const openOverlay = useCallback(() => setOverlayOpen(true), [])
+
+  const closeOverlay = useCallback(() => {
+    if (autoTimer.current) clearTimeout(autoTimer.current)
+    setOverlayOpen(false)
+  }, [])
+
+  // Treat a pause-like signal as "open after a beat" and a resume-like signal
+  // as "close now" (also cancels a pending open).
+  const scheduleAuto = useCallback(
+    (paused) => {
+      if (autoTimer.current) clearTimeout(autoTimer.current)
+      if (paused) autoTimer.current = setTimeout(openOverlay, 2000)
+      else closeOverlay()
+    },
+    [openOverlay, closeOverlay],
+  )
+
+  const toggleOverlay = () => {
+    if (autoTimer.current) clearTimeout(autoTimer.current)
+    setOverlayOpen((o) => !o)
+  }
 
   // single-serving fallback for pages that don't hand us a servers list
   let fallback = ''
@@ -59,6 +120,60 @@ export default function VideoPlayer({
       : active
         ? active.embedUrl
         : ''
+
+  // Free win: embeds that report player state via postMessage drive the
+  // overlay. Common message shapes are accepted; unknown messages are ignored,
+  // so unrelated page messages never flip it.
+  useEffect(() => {
+    const onMessage = (e) => {
+      const d = e?.data
+      if (!d || typeof d !== 'object') return
+      let paused = null
+      const type = typeof d.type === 'string' ? d.type.toLowerCase() : ''
+      if (type === 'pause' || type === 'paused') paused = true
+      else if (type === 'play' || type === 'playing') paused = false
+      else if (d.event === 'pause') paused = true
+      else if (d.event === 'play') paused = false
+      else if (d.playing === false || d.paused === true) paused = true
+      else if (d.playing === true || d.paused === false) paused = false
+      else if (d.state === 'paused' || d.state === 'pause' || d.status === 'paused') paused = true
+      else if (d.state === 'playing' || d.state === 'play' || d.status === 'playing') paused = false
+      if (paused !== null) scheduleAuto(paused)
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [scheduleAuto])
+
+  // Smart-ish heuristic: clicking inside a cross-origin iframe moves focus out
+  // of our window (blur) — which is exactly when someone pauses. Open the
+  // overlay ~2s later; coming back (focus) closes it.
+  useEffect(() => {
+    const onBlur = () => scheduleAuto(true)
+    const onFocus = () => scheduleAuto(false)
+    window.addEventListener('blur', onBlur)
+    window.addEventListener('focus', onFocus)
+    return () => {
+      window.removeEventListener('blur', onBlur)
+      window.removeEventListener('focus', onFocus)
+      if (autoTimer.current) clearTimeout(autoTimer.current)
+    }
+  }, [scheduleAuto])
+
+  // Bonus: hardware media keys ("pause"/"play") map onto the overlay.
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return
+    const ms = navigator.mediaSession
+    try {
+      ms.setActionHandler('pause', () => scheduleAuto(true))
+      ms.setActionHandler('play', () => scheduleAuto(false))
+    } catch { /* older browsers */ }
+    return () => {
+      try {
+        ms.setActionHandler('pause', null)
+        ms.setActionHandler('play', null)
+      } catch { /* noop */ }
+    }
+  }, [scheduleAuto])
 
   const setVideasyMode = (mode) => {
     setVideasyAnilist(mode === 'anilist')
@@ -104,6 +219,24 @@ export default function VideoPlayer({
     )
   }
 
+  // Server dropdown options: "Auto" plus each named server.
+  const serverOptions = [
+    { value: 'auto', label: `Auto — ${active?.name || 'next'}` },
+    ...list.map((s) => ({ value: s.id, label: s.name })),
+  ]
+  const serverValue = autoMode ? 'auto' : pinned
+  const onServerChange = (v) => (v === 'auto' ? pickAuto() : pickManual(v))
+
+  // AniList descriptions are HTML — strip tags so the overlay reads cleanly.
+  const cleanDesc = (description || '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  const showSeason = Boolean(seasonOptions && seasonOptions.length && onSeasonChange)
+  const showEpisode = Boolean(episodeOptions && episodeOptions.length && onEpisodeChange)
+  const showPrevNext = Boolean(onPrev || onNext)
+
   return (
     <div>
       <div
@@ -144,52 +277,102 @@ export default function VideoPlayer({
             </button>
           </div>
         )}
+
+        {/* Info overlay: title + poster + description. Opened manually via the
+            ⓘ Info button, or automatically a couple of seconds after a
+            pause-like signal. */}
+        {title && overlayOpen && (
+          <div className="vp-overlay">
+            <div className="vp-overlay-card">
+              {poster && <img className="vp-overlay-poster" src={poster} alt={title} />}
+              <div className="vp-overlay-body">
+                <span className="vp-overlay-eyebrow">Now Playing</span>
+                <h3 className="vp-overlay-title">{title}</h3>
+                {cleanDesc && <p className="vp-overlay-desc">{cleanDesc}</p>}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      <div className="servers">
-        <div className="servers-head">
-          <span className="servers-label">Servers · {list.length}</span>
-          <span className="servers-status">
-            {autoMode
-              ? `Auto — trying ${active.name} (${attempt + 1}/${list.length})`
-              : `${active.name}`}
-          </span>
-        </div>
-        <div className="server-chips">
+      <div className="player-controls">
+        <div className="player-controls-left">
           <button
             type="button"
-            className={`server-chip${autoMode ? ' active' : ''}`}
-            onClick={pickAuto}
+            className={`pnav-btn info-overlay-btn${overlayOpen ? ' active' : ''}`}
+            onClick={toggleOverlay}
+            aria-pressed={overlayOpen}
+            aria-label="Show title and description"
+            title="Show / hide title & description"
           >
-            Auto
+            ⓘ Info
           </button>
-          {list.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              className={`server-chip${!autoMode && pinned === s.id ? ' active' : ''}`}
-              onClick={() => pickManual(s.id)}
-            >
-              {s.name}
-            </button>
-          ))}
+
+          {showSeason && (
+            <FilterSelect
+              label="Season"
+              value={season != null ? String(season) : ''}
+              onChange={(v) => onSeasonChange(v ? Number(v) : null)}
+              options={seasonOptions}
+            />
+          )}
+
+          {showEpisode && (
+            <FilterSelect
+              label="Episode"
+              value={episode != null ? String(episode) : ''}
+              onChange={(v) => onEpisodeChange(v ? Number(v) : null)}
+              options={episodeOptions}
+            />
+          )}
+
+          <FilterSelect
+            label="Server"
+            value={serverValue}
+            onChange={onServerChange}
+            options={serverOptions}
+          />
+
+          {anilistId && isVideasyActive && (
+            <div className="videasy-toggle">
+              <span className="videasy-toggle-label">Source</span>
+              <button
+                type="button"
+                className={!videasyAnilist ? 'active' : ''}
+                onClick={() => setVideasyMode('tmdb')}
+              >
+                TMDB
+              </button>
+              <button
+                type="button"
+                className={videasyAnilist ? 'active' : ''}
+                onClick={() => setVideasyMode('anilist')}
+              >
+                AniList
+              </button>
+            </div>
+          )}
         </div>
-        {anilistId && isVideasyActive && (
-          <div className="videasy-toggle">
-            <span className="videasy-toggle-label">Source</span>
+
+        {showPrevNext && (
+          <div className="player-controls-right">
             <button
               type="button"
-              className={!videasyAnilist ? 'active' : ''}
-              onClick={() => setVideasyMode('tmdb')}
+              className="pnav-btn"
+              onClick={onPrev}
+              disabled={!canPrev}
+              aria-label="Previous episode"
             >
-              TMDB
+              ‹ Prev
             </button>
             <button
               type="button"
-              className={videasyAnilist ? 'active' : ''}
-              onClick={() => setVideasyMode('anilist')}
+              className="pnav-btn"
+              onClick={onNext}
+              disabled={!canNext}
+              aria-label="Next episode"
             >
-              AniList
+              Next ›
             </button>
           </div>
         )}
