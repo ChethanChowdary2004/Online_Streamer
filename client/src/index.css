@@ -433,6 +433,34 @@ button {
   border-radius: 4px;
 }
 
+/* ---------- Anime top-bar search + genre filter ----------
+   On the anime page the search box and genre dropdown live in the sticky
+   top bar (not on the page), replacing the global search. The input reuses
+   the navbar pill; the FilterSelect is overridden to sit inline. */
+.anime-search {
+  gap: var(--space-3);
+}
+
+.anime-search input {
+  width: 220px;
+}
+
+.anime-search .filter-group {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.anime-search .filter-label {
+  margin: 0;
+}
+
+.anime-search .filter-dropdown-button {
+  min-width: 130px;
+  max-width: 170px;
+  padding: 8px 12px;
+}
+
 /* ---------- Buttons ---------- */
 .btn {
   display: inline-flex;
@@ -1155,6 +1183,213 @@ button {
   color: #fff;
 }
 
+/* VIDEASY TMDB/AniList source toggle (anime only) */
+.videasy-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.videasy-toggle-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-right: var(--space-1);
+}
+
+.videasy-toggle button {
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 16px;
+  border-radius: 999px;
+  transition: background var(--fast) var(--ease), border-color var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+
+.videasy-toggle button:hover {
+  border-color: var(--accent);
+}
+
+.videasy-toggle button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* ---------- Player controls row (season/episode/server + prev/next) ---------- */
+.player-controls {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin: 14px 4px 0;
+  flex-wrap: wrap;
+}
+
+.player-controls-left {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.player-controls-right {
+  display: flex;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.player-controls .filter-group {
+  gap: var(--space-2);
+}
+
+.player-controls .filter-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.player-controls .filter-dropdown-button {
+  min-width: 150px;
+  padding: 9px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+
+.player-controls .videasy-toggle {
+  margin-top: 0;
+  padding: 0 var(--space-1);
+}
+
+.pnav-btn {
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 16px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--fast) var(--ease), border-color var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+
+.pnav-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.pnav-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pnav-btn.info-overlay-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* ---------- Info overlay (text only, left; eased entrance) ---------- */
+.vp-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: var(--space-6) var(--space-8);
+  background: linear-gradient(
+    to bottom,
+    rgba(10, 10, 10, 0.3) 0%,
+    rgba(10, 10, 10, 0.16) 50%,
+    rgba(10, 10, 10, 0.55) 100%
+  );
+  /* Click-to-dismiss: the embed is sealed so the "resume" click can't be seen
+   from outside, so while the overlay is up any click over the player closes it.
+   `pointer-events` flips to auto so clicks land on the overlay instead of going
+   straight into the iframe. */
+  pointer-events: auto;
+  cursor: pointer;
+  animation: vp-overlay-in 0.45s ease-in both;
+}
+
+@keyframes vp-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Left-side scrim keeps the text legible over the video. */
+.vp-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to right,
+    rgba(0, 0, 0, 0.6) 0%,
+    rgba(0, 0, 0, 0.2) 45%,
+    transparent 70%
+  );
+}
+
+.vp-overlay-content {
+  position: relative;
+  z-index: 1;
+  max-width: 58%;
+  text-align: left;
+  animation: vp-overlay-content-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes vp-overlay-content-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.vp-overlay-eyebrow {
+  display: inline-block;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: var(--space-3);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+}
+
+.vp-overlay-title {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(26px, 4.5vw, 44px);
+  line-height: 1.05;
+  letter-spacing: 0.3px;
+  margin: 0 0 var(--space-3);
+  color: #fff;
+  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
+}
+
+.vp-overlay-desc {
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 16px;
+  line-height: 1.6;
+  margin: 0;
+}
+
 /* ---------- Series page ---------- */
 .series-page {
   padding: var(--space-6) var(--space-10) 60px;
@@ -1596,6 +1831,17 @@ button {
     font-size: 22px;
   }
 
+  .anime-search {
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
+
+  .anime-search input {
+    flex: 1;
+    width: auto;
+    min-width: 120px;
+  }
+
   .nav-links {
     gap: var(--space-3);
   }
@@ -1696,6 +1942,48 @@ button {
 
   .player-sub {
     font-size: 13px;
+  }
+
+  .player-controls {
+    margin-top: 10px;
+    gap: var(--space-3);
+  }
+
+  .player-controls .filter-dropdown-button {
+    min-width: 110px;
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  .player-controls-right {
+    margin-left: 0;
+  }
+
+  .pnav-btn {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .vp-overlay {
+    padding: var(--space-4);
+  }
+
+  .vp-overlay-content {
+    max-width: 82%;
+  }
+
+  .vp-overlay-title {
+    font-size: 24px;
+    margin-bottom: var(--space-2);
+  }
+
+  .vp-overlay-desc {
+    font-size: 13px;
+    line-clamp: 3;
+    -webkit-line-clamp: 3;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   .search-page h2 {

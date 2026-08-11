@@ -73,3 +73,33 @@ export const getStream = ({ tmdbId, title, year, mediaType, season, episode }) =
   if (episode) params.set('episode', episode)
   return getJSON(`/api/stream?${params}`)
 }
+
+// --- Anime (AniList) ---
+// AniList responses stay in their raw shape (Page.media.* / Media.*). Cover
+// and banner URLs are absolute, so no imageUrl() mapping is needed here.
+
+// Unwrap the media array that every anime shelf/search query returns under Page.
+export const animeMedia = (data) => data?.Page?.media || []
+
+// AniList shelf: trending / top-rated / latest / movies.
+export const getAnimeList = (list, page = 1) =>
+  getJSON(`/api/anime/${list}?page=${page}`)
+
+// Single-genre browse shelf (/api/anime/genre/{genre}).
+export const getAnimeGenre = (genre, page = 1) =>
+  getJSON(`/api/anime/genre/${encodeURIComponent(genre)}?page=${page}`)
+
+export const searchAnime = (q, page = 1) =>
+  getJSON(`/api/anime/search?q=${encodeURIComponent(q)}&page=${page}`)
+
+// Genre tags for the filter dropdown.
+export const getAnimeGenres = () => getJSON('/api/anime/genres')
+
+export const getAnimeDetail = (id) => getJSON(`/api/anime/${id}/detail`)
+
+// VIDEASY anime embed. Shows take an episode number; movies only need the
+// AniList ID. The player provides subbed + dubbed versions automatically.
+export const animeEmbed = (anilistId, episode) =>
+  episode
+    ? `https://player.videasy.net/anime/${anilistId}/${episode}`
+    : `https://player.videasy.net/anime/${anilistId}`

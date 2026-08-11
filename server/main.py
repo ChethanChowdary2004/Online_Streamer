@@ -11,6 +11,7 @@ from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+import anilist
 import streams
 import tmdb
 
@@ -148,6 +149,53 @@ async def genres() -> dict:
     movies = await tmdb.tmdb("/genre/movie/list")
     tv = await tmdb.tmdb("/genre/tv/list")
     return {"movie": movies.get("genres", []), "tv": tv.get("genres", [])}
+
+
+# --- Anime (AniList) ---
+# Responses stay in AniList's raw shape (Page.media.* / Media.*) because the
+# anime-specific components consume those fields directly — no TMDB mapping.
+#
+# Registration order matters here: the static routes (/search, /genres) must
+# come before the /api/anime/{list} shelf wildcard so they are not shadowed.
+
+ANIME_SHELVES = {
+    "trending": anilist.trending,
+    "top-rated": anilist.top_rated,
+    "latest": anilist.latest,
+    "movies": anilist.movies,
+}
+
+
+@app.get("/api/anime/search")
+async def anime_search(q: str = Query(..., min_length=1), page: int = Query(1, ge=1)) -> dict:
+    """Anime title search (AniList fuzzy match)."""
+    return await anilist.search(q, page)
+
+
+@app.get("/api/anime/genres")
+async def anime_genres() -> dict:
+    """Anime genre tags for the filter dropdown."""
+    return await anilist.genres()
+
+
+@app.get("/api/anime/genre/{genre}")
+async def anime_genre_list(genre: str, page: int = Query(1, ge=1, le=100)) -> dict:
+    """Browse shelf: anime under a single genre tag, most popular first."""
+    return await anilist.by_genre(genre, page)
+
+
+@app.get("/api/anime/{anilist_id}/detail")
+async def anime_detail(anilist_id: int) -> dict:
+    """Full anime detail: synopsis, studio, format, genres, episodes, relations."""
+    return await anilist.detail(anilist_id)
+
+
+@app.get("/api/anime/{list}")
+async def anime_list(list: str, page: int = Query(1, ge=1, le=100)) -> dict:
+    """Anime shelf: /api/anime/{trending|top-rated|latest|movies}."""
+    if list not in ANIME_SHELVES:
+        raise HTTPException(404, f"Unknown anime list: {list}")
+    return await ANIME_SHELVES[list](page)
 
 
 @app.get("/api/stream")
