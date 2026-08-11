@@ -56,6 +56,10 @@ export const searchMulti = (q, page = 1) =>
 export const searchTv = (q, page = 1) =>
   getJSON(`/api/search/tv?q=${encodeURIComponent(q)}&page=${page}`)
 
+// Movie-only search for the Movies page.
+export const searchMovies = (q, page = 1) =>
+  getJSON(`/api/search/movie?q=${encodeURIComponent(q)}&page=${page}`)
+
 // Movie + TV genre lists for filter dropdowns.
 export const getGenres = () => getJSON('/api/genres')
 
