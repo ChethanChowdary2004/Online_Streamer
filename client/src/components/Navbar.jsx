@@ -4,6 +4,7 @@ export default function Navbar({ isOpen, onClose }) {
   const location = useLocation()
 
   const isHomePage = location.pathname === '/'
+  const isMoviesPage = location.pathname === '/movies'
   const isSeriesPage = location.pathname === '/series'
   const isAnimePage = location.pathname === '/anime'
 
@@ -26,6 +27,14 @@ export default function Navbar({ isOpen, onClose }) {
         >
           <span className="nav-item-dot"></span>
           <span>Home</span>
+        </Link>
+        <Link
+          to="/movies"
+          className={`nav-item ${isMoviesPage ? 'active' : ''}`}
+          onClick={onClose}
+        >
+          <span className="nav-item-dot"></span>
+          <span>Movies</span>
         </Link>
         <Link
           to="/series"

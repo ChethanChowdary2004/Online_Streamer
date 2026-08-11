@@ -137,6 +137,12 @@ async def search_tv(q: str = Query(..., min_length=1), page: int = Query(1, ge=1
     return await tmdb.tmdb("/search/tv", {"query": q, "page": page})
 
 
+@app.get("/api/search/movie")
+async def search_movie(q: str = Query(..., min_length=1), page: int = Query(1, ge=1)) -> dict:
+    """Movie-only search for the Movies page."""
+    return await tmdb.tmdb("/search/movie", {"query": q, "page": page})
+
+
 @app.get("/api/genres")
 async def genres() -> dict:
     """Movie and TV genre lists for filters/labels."""

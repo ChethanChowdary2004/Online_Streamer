@@ -35,6 +35,10 @@ export default function Topbar({
   // relevant lives under the player). Anime replaces it with its own controls.
   const isBrowsedPage =
     location.pathname === '/series' || location.pathname.startsWith('/watch')
+  // Movies and Series pages have their own search + filters, so the global
+  // search is hidden there.
+  const isBrowsedPage =
+    location.pathname === '/movies' || location.pathname === '/series'
 
   return (
     <header className="navbar">
