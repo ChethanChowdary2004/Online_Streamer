@@ -12,7 +12,10 @@ export default function Topbar({ onToggleSidebar }) {
     if (q) navigate(`/search?q=${encodeURIComponent(q)}`)
   }
 
-  const isSeriesPage = location.pathname === '/series'
+  // Movies and Series pages have their own search + filters, so the global
+  // search is hidden there.
+  const isBrowsedPage =
+    location.pathname === '/movies' || location.pathname === '/series'
 
   return (
     <header className="navbar">
@@ -30,7 +33,7 @@ export default function Topbar({ onToggleSidebar }) {
         <img src="/yugostream_title_transparent.png" alt="YUGOSTREAM" className="navbar-brand-image" />
       </Link>
 
-      {!isSeriesPage && (
+      {!isBrowsedPage && (
         <form className="navbar-search" onSubmit={submit}>
           <input
             value={query}

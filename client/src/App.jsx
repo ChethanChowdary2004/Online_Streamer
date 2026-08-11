@@ -3,6 +3,7 @@ import { Route, Routes } from 'react-router-dom'
 import Topbar from './components/Topbar'
 import Navbar from './components/Navbar'
 import Home from './pages/Home'
+import Movies from './pages/Movies'
 import Series from './pages/Series'
 import Search from './pages/Search'
 import MovieDetail from './pages/MovieDetail'
@@ -27,6 +28,7 @@ export default function App() {
       <main>
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/movies" element={<Movies />} />
           <Route path="/series" element={<Series />} />
           <Route path="/search" element={<Search />} />
           <Route path="/movie/:id" element={<MovieDetail />} />
