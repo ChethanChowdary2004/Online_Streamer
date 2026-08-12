@@ -30,15 +30,14 @@ export default function Topbar({
   )
   const genreList = genresFetch.data?.GenreCollection || []
 
-  // Page-level toolbars replace the global search on these routes (Series has
-  // its own search + filters; the watch page has no need for it — everything
-  // relevant lives under the player). Anime replaces it with its own controls.
+  // Page-level toolbars replace the global search on these routes (Movies and
+  // Series have their own search + filters; the watch page has no need for it —
+  // everything relevant lives under the player). Anime replaces it with its own
+  // controls.
   const isBrowsedPage =
-    location.pathname === '/series' || location.pathname.startsWith('/watch')
-  // Movies and Series pages have their own search + filters, so the global
-  // search is hidden there.
-  const isBrowsedPage =
-    location.pathname === '/movies' || location.pathname === '/series'
+    location.pathname === '/movies' ||
+    location.pathname === '/series' ||
+    location.pathname.startsWith('/watch')
 
   return (
     <header className="navbar">
