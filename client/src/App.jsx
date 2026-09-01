@@ -9,7 +9,10 @@ import AnimeDetail from './pages/AnimeDetail'
 import Search from './pages/Search'
 import MovieDetail from './pages/MovieDetail'
 import TvDetail from './pages/TvDetail'
-import PlayerPage from './pages/PlayerPage'
+import MoviePlayerPage from './pages/MoviePlayerPage'
+import SeriesPlayerPage from './pages/SeriesPlayerPage'
+import AnimePlayerPage from './pages/AnimePlayerPage'
+import PlayerRouter from './pages/PlayerRouter'
 
 export default function App() {
   const [animeQuery, setAnimeQuery] = useState('')
@@ -36,7 +39,7 @@ export default function App() {
           <Route path="/search" element={<Search />} />
           <Route path="/movie/:id" element={<MovieDetail />} />
           <Route path="/tv/:id" element={<TvDetail />} />
-          <Route path="/watch/:type/:id" element={<PlayerPage />} />
+          <Route path="/watch/:type/:id" element={<PlayerRouter />} />
           <Route path="*" element={<Home />} />
         </Routes>
       </main>

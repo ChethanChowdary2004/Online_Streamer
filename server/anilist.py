@@ -1,9 +1,9 @@
 """
-AniList API client.
+AniList API client with SQLite caching.
 
-Thin wrapper around the AniList GraphQL API. Centralizes the GraphQL queries
-for anime discovery so the browser never talks to AniList directly. AniList
-does not require an API key, so cache-control and timeouts are the only knobs.
+Thin wrapper around the AniList GraphQL API with local caching to minimize
+API calls (AniList rate-limits to ~90 requests/min per IP and blocks on bursts).
+Cache expires every 6 hours and is automatically refreshed on next access.
 
 All responses are returned in AniList's raw shape (Page.media.*, Media.*) —
 no TMDB normalization. The anime-specific frontend components consume these
@@ -13,6 +13,8 @@ import asyncio
 import time
 
 import httpx
+
+import anime_cache
 
 ANILIST_API = "https://graphql.anilist.co"
 
@@ -262,40 +264,96 @@ async def _post(query: str, variables: dict | None = None) -> dict:
 
 
 async def trending(page: int = 1) -> dict:
-    """Anime ordered by daily trending score."""
-    return await _post(TRENDING_QUERY, {"page": page})
+    """Anime ordered by daily trending score. Uses cache to minimize API calls."""
+    cached = anime_cache.get_shelf("trending", page)
+    if cached:
+        return cached
+
+    result = await _post(TRENDING_QUERY, {"page": page})
+    anime_cache.set_shelf("trending", page, result)
+    return result
 
 
 async def top_rated(page: int = 1) -> dict:
-    """Anime ordered by average score."""
-    return await _post(TOP_RATED_QUERY, {"page": page})
+    """Anime ordered by average score. Uses cache to minimize API calls."""
+    cached = anime_cache.get_shelf("top-rated", page)
+    if cached:
+        return cached
+
+    result = await _post(TOP_RATED_QUERY, {"page": page})
+    anime_cache.set_shelf("top-rated", page, result)
+    return result
 
 
 async def latest(page: int = 1) -> dict:
-    """Currently releasing anime, newest first."""
-    return await _post(LATEST_QUERY, {"page": page})
+    """Currently releasing anime, newest first. Uses cache to minimize API calls."""
+    cached = anime_cache.get_shelf("latest", page)
+    if cached:
+        return cached
+
+    result = await _post(LATEST_QUERY, {"page": page})
+    anime_cache.set_shelf("latest", page, result)
+    return result
 
 
 async def movies(page: int = 1) -> dict:
-    """Anime films (format: MOVIE) ordered by score."""
-    return await _post(MOVIES_QUERY, {"page": page})
+    """Anime films (format: MOVIE) ordered by score. Uses cache to minimize API calls."""
+    cached = anime_cache.get_shelf("movies", page)
+    if cached:
+        return cached
+
+    result = await _post(MOVIES_QUERY, {"page": page})
+    anime_cache.set_shelf("movies", page, result)
+    return result
 
 
 async def search(q: str, page: int = 1) -> dict:
-    """Fuzzy title search across anime."""
-    return await _post(SEARCH_QUERY, {"page": page, "q": q})
+    """Fuzzy title search across anime. Uses cache to minimize API calls."""
+    cached = anime_cache.get_search(q, page)
+    if cached:
+        return cached
+
+    result = await _post(SEARCH_QUERY, {"page": page, "q": q})
+    anime_cache.set_search(q, page, result)
+    return result
 
 
 async def by_genre(genre: str, page: int = 1) -> dict:
-    """One page of anime under a single genre tag, most popular first."""
-    return await _post(GENRE_QUERY, {"page": page, "genre": genre})
+    """One page of anime under a single genre tag, most popular first. Uses cache."""
+    cache_key = f"genre_{genre}"
+    cached = anime_cache.get_shelf(cache_key, page)
+    if cached:
+        return cached
+
+    result = await _post(GENRE_QUERY, {"page": page, "genre": genre})
+    anime_cache.set_shelf(cache_key, page, result)
+    return result
 
 
 async def genres() -> dict:
-    """All anime genre tags (for the filter dropdown)."""
-    return await _post(GENRES_QUERY)
+    """All anime genre tags (for the filter dropdown). Cached separately."""
+    cached = anime_cache.get_shelf("genres", 1)
+    if cached:
+        return cached
+
+    result = await _post(GENRES_QUERY)
+    anime_cache.set_shelf("genres", 1, result)
+    return result
 
 
 async def detail(anilist_id: int) -> dict:
-    """Full detail for one title: synopsis, studio, format, relations, episodes."""
-    return await _post(DETAIL_QUERY, {"id": anilist_id})
+    """Full detail for one title: synopsis, studio, format, relations, episodes.
+    Uses cache with AniList ID as key to minimize API calls.
+    """
+    cached = anime_cache.get_anime(anilist_id)
+    if cached:
+        return cached
+
+    result = await _post(DETAIL_QUERY, {"id": anilist_id})
+
+    # Extract title for display/logging
+    media = result.get("Media", {})
+    title = media.get("title", {}).get("romaji", f"Anime {anilist_id}")
+
+    anime_cache.set_anime(anilist_id, title, result)
+    return result
