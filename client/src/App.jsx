@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import Topbar from './components/Topbar'
-import Navbar from './components/Navbar'
 import Home from './pages/Home'
 import Movies from './pages/Movies'
 import Series from './pages/Series'
@@ -13,31 +12,17 @@ import TvDetail from './pages/TvDetail'
 import PlayerPage from './pages/PlayerPage'
 
 export default function App() {
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-
-  // The anime page's search + genre filter live in the top bar, so their state
-  // is owned here and shared by the Topbar (inputs) and AnimePage (browsing).
   const [animeQuery, setAnimeQuery] = useState('')
   const [animeGenre, setAnimeGenre] = useState('')
-
-  const toggleSidebar = () => {
-    setSidebarOpen(!sidebarOpen)
-  }
-
-  const closeSidebar = () => {
-    setSidebarOpen(false)
-  }
 
   return (
     <>
       <Topbar
-        onToggleSidebar={toggleSidebar}
         animeQuery={animeQuery}
         onAnimeQuery={setAnimeQuery}
         animeGenre={animeGenre}
         onAnimeGenre={setAnimeGenre}
       />
-      <Navbar isOpen={sidebarOpen} onClose={closeSidebar} />
       <main>
         <Routes>
           <Route path="/" element={<Home />} />

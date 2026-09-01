@@ -5,7 +5,6 @@ import useFetch from '../hooks/useFetch'
 import FilterSelect from './FilterSelect'
 
 export default function Topbar({
-  onToggleSidebar,
   animeQuery,
   onAnimeQuery,
   animeGenre,
@@ -21,8 +20,6 @@ export default function Topbar({
     if (q) navigate(`/search?q=${encodeURIComponent(q)}`)
   }
 
-  // The anime page folds its search + genre filter into the top bar, so its
-  // genre list is fetched here (only while actually on /anime).
   const isAnimePage = location.pathname === '/anime'
   const genresFetch = useFetch(
     () => (isAnimePage ? getAnimeGenres() : Promise.resolve(null)),
@@ -30,30 +27,35 @@ export default function Topbar({
   )
   const genreList = genresFetch.data?.GenreCollection || []
 
-  // Page-level toolbars replace the global search on these routes (Movies and
-  // Series have their own search + filters; the watch page has no need for it —
-  // everything relevant lives under the player). Anime replaces it with its own
-  // controls.
   const isBrowsedPage =
     location.pathname === '/movies' ||
     location.pathname === '/series' ||
     location.pathname.startsWith('/watch')
 
+  const navLinks = [
+    { to: '/', label: 'Home' },
+    { to: '/movies', label: 'Movies' },
+    { to: '/series', label: 'Series' },
+    { to: '/anime', label: 'Anime' },
+  ]
+
   return (
     <header className="navbar">
-      <button
-        className="navbar-toggle"
-        onClick={onToggleSidebar}
-        aria-label="Toggle menu"
-      >
-        <span></span>
-        <span></span>
-        <span></span>
-      </button>
-
       <Link to="/" className="navbar-brand">
         <img src="/yugostream_title_transparent.png" alt="YUGOSTREAM" className="navbar-brand-image" />
       </Link>
+
+      <nav className="nav-links">
+        {navLinks.map((link) => (
+          <Link
+            key={link.to}
+            to={link.to}
+            className={`nav-link ${location.pathname === link.to ? 'active' : ''}`}
+          >
+            {link.label}
+          </Link>
+        ))}
+      </nav>
 
       {isAnimePage ? (
         <div className="navbar-search anime-search">
