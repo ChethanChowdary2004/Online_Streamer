@@ -1,10 +1,22 @@
+import { supabase } from './lib/supabase'
+
 // Client-side API layer. All calls go through the Vite dev proxy (/api) to the
 // FastAPI backend, so the TMDB API key never reaches the browser.
 
 const IMAGE_BASE = 'https://image.tmdb.org/t/p'
 
 async function getJSON(url) {
-  const res = await fetch(url)
+  const headers = {}
+
+  // Attach auth token if available, but only for our backend API calls
+  if (url.startsWith('/api/')) {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.access_token) {
+      headers['Authorization'] = `Bearer ${session.access_token}`
+    }
+  }
+
+  const res = await fetch(url, { headers })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.detail || `Request failed (${res.status})`)
@@ -52,6 +64,17 @@ export const getTvSeason = (id, season) =>
 export const searchMulti = (q, page = 1) =>
   getJSON(`/api/search?q=${encodeURIComponent(q)}&page=${page}`)
 
+// TV-only search for the Series page.
+export const searchTv = (q, page = 1) =>
+  getJSON(`/api/search/tv?q=${encodeURIComponent(q)}&page=${page}`)
+
+// Movie-only search for the Movies page.
+export const searchMovies = (q, page = 1) =>
+  getJSON(`/api/search/movie?q=${encodeURIComponent(q)}&page=${page}`)
+
+// Movie + TV genre lists for filter dropdowns.
+export const getGenres = () => getJSON('/api/genres')
+
 // Resolve the embed servers (WFS + VidLink) for a movie or TV title.
 // TV shows pass season + episode so each provider gets the right URL.
 export const getStream = ({ tmdbId, title, year, mediaType, season, episode }) => {
@@ -62,3 +85,33 @@ export const getStream = ({ tmdbId, title, year, mediaType, season, episode }) =
   if (episode) params.set('episode', episode)
   return getJSON(`/api/stream?${params}`)
 }
+
+// --- Anime (AniList) ---
+// AniList responses stay in their raw shape (Page.media.* / Media.*). Cover
+// and banner URLs are absolute, so no imageUrl() mapping is needed here.
+
+// Unwrap the media array that every anime shelf/search query returns under Page.
+export const animeMedia = (data) => data?.Page?.media || []
+
+// AniList shelf: trending / top-rated / latest / movies.
+export const getAnimeList = (list, page = 1) =>
+  getJSON(`/api/anime/${list}?page=${page}`)
+
+// Single-genre browse shelf (/api/anime/genre/{genre}).
+export const getAnimeGenre = (genre, page = 1) =>
+  getJSON(`/api/anime/genre/${encodeURIComponent(genre)}?page=${page}`)
+
+export const searchAnime = (q, page = 1) =>
+  getJSON(`/api/anime/search?q=${encodeURIComponent(q)}&page=${page}`)
+
+// Genre tags for the filter dropdown.
+export const getAnimeGenres = () => getJSON('/api/anime/genres')
+
+export const getAnimeDetail = (id) => getJSON(`/api/anime/${id}/detail`)
+
+// VIDEASY anime embed. Shows take an episode number; movies only need the
+// AniList ID. The player provides subbed + dubbed versions automatically.
+export const animeEmbed = (anilistId, episode) =>
+  episode
+    ? `https://player.videasy.net/anime/${anilistId}/${episode}`
+    : `https://player.videasy.net/anime/${anilistId}`

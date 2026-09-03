@@ -7,12 +7,14 @@ freely-streamable video sources (public-domain Archive.org films).
 Run with:
     .venv/Scripts/python -m uvicorn main:app --reload --port 8000
 """
-from fastapi import FastAPI, HTTPException, Request, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+import anilist
 import streams
 import tmdb
+from auth import get_current_user
 
 app = FastAPI(title="Online Streamer API", version="0.1.0")
 
@@ -37,7 +39,14 @@ TV_LISTS = {"popular", "top_rated", "airing_today", "on_the_air"}
 
 # Query params the home page is allowed to forward to the TMDB discover
 # endpoint (genre/keyword shelves). Anything else is dropped.
-DISCOVER_ALLOWED = {"with_genres", "with_keywords", "sort_by", "vote_count.gte"}
+DISCOVER_ALLOWED = {
+    "with_genres",
+    "with_keywords",
+    "sort_by",
+    "vote_count.gte",
+    "with_original_language",
+    "page",
+}
 
 
 @app.get("/api/health")
@@ -123,12 +132,76 @@ async def search(
     return await tmdb.tmdb("/search/multi", {"query": q, "page": page})
 
 
+@app.get("/api/search/tv")
+async def search_tv(q: str = Query(..., min_length=1), page: int = Query(1, ge=1)) -> dict:
+    """TV-only search for the Series page."""
+    return await tmdb.tmdb("/search/tv", {"query": q, "page": page})
+
+
+@app.get("/api/search/movie")
+async def search_movie(q: str = Query(..., min_length=1), page: int = Query(1, ge=1)) -> dict:
+    """Movie-only search for the Movies page."""
+    return await tmdb.tmdb("/search/movie", {"query": q, "page": page})
+
+
 @app.get("/api/genres")
 async def genres() -> dict:
     """Movie and TV genre lists for filters/labels."""
     movies = await tmdb.tmdb("/genre/movie/list")
     tv = await tmdb.tmdb("/genre/tv/list")
     return {"movie": movies.get("genres", []), "tv": tv.get("genres", [])}
+
+
+# --- Anime (AniList) ---
+# Responses stay in AniList's raw shape (Page.media.* / Media.*) because the
+# anime-specific components consume those fields directly — no TMDB mapping.
+#
+# Registration order matters here: the static routes (/search, /genres) must
+# come before the /api/anime/{list} shelf wildcard so they are not shadowed.
+
+ANIME_SHELVES = {
+    "trending": anilist.trending,
+    "top-rated": anilist.top_rated,
+    "latest": anilist.latest,
+    "movies": anilist.movies,
+}
+
+
+@app.get("/api/anime/search")
+async def anime_search(q: str = Query(..., min_length=1), page: int = Query(1, ge=1)) -> dict:
+    """Anime title search (AniList fuzzy match)."""
+    return await anilist.search(q, page)
+
+
+@app.get("/api/anime/genres")
+async def anime_genres() -> dict:
+    """Anime genre tags for the filter dropdown."""
+    return await anilist.genres()
+
+@app.get("/api/me")
+async def read_users_me(current_user: dict = Depends(get_current_user)):
+    """Returns the current authenticated user's profile info from the JWT token."""
+    return current_user
+
+
+@app.get("/api/anime/genre/{genre}")
+async def anime_genre_list(genre: str, page: int = Query(1, ge=1, le=100)) -> dict:
+    """Browse shelf: anime under a single genre tag, most popular first."""
+    return await anilist.by_genre(genre, page)
+
+
+@app.get("/api/anime/{anilist_id}/detail")
+async def anime_detail(anilist_id: int) -> dict:
+    """Full anime detail: synopsis, studio, format, genres, episodes, relations."""
+    return await anilist.detail(anilist_id)
+
+
+@app.get("/api/anime/{list}")
+async def anime_list(list: str, page: int = Query(1, ge=1, le=100)) -> dict:
+    """Anime shelf: /api/anime/{trending|top-rated|latest|movies}."""
+    if list not in ANIME_SHELVES:
+        raise HTTPException(404, f"Unknown anime list: {list}")
+    return await ANIME_SHELVES[list](page)
 
 
 @app.get("/api/stream")
