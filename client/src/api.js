@@ -1,10 +1,22 @@
+import { supabase } from './lib/supabase'
+
 // Client-side API layer. All calls go through the Vite dev proxy (/api) to the
 // FastAPI backend, so the TMDB API key never reaches the browser.
 
 const IMAGE_BASE = 'https://image.tmdb.org/t/p'
 
 async function getJSON(url) {
-  const res = await fetch(url)
+  const headers = {}
+
+  // Attach auth token if available, but only for our backend API calls
+  if (url.startsWith('/api/')) {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.access_token) {
+      headers['Authorization'] = `Bearer ${session.access_token}`
+    }
+  }
+
+  const res = await fetch(url, { headers })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.detail || `Request failed (${res.status})`)

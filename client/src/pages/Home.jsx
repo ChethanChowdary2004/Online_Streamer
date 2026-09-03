@@ -8,6 +8,7 @@ import {
 import useFetch from '../hooks/useFetch'
 import HeroBanner from '../components/HeroBanner'
 import MovieRow from '../components/MovieRow'
+import Skeleton from '../components/Skeleton'
 
 export default function Home() {
   const trending = useFetch(() => getTrending())
@@ -29,9 +30,6 @@ export default function Home() {
     [trending.data],
   )
 
-  // Show the spinner until the hero is ready; rows appear as they load.
-  if (trending.loading) return <div className="spinner" />
-
   const rows = [
     { title: 'Popular Movies', list: popularMovies, type: 'movie' },
     { title: 'Popular Series', list: popularSeries, type: 'tv' },
@@ -44,7 +42,11 @@ export default function Home() {
 
   return (
     <>
-      <HeroBanner items={heroItems} />
+      {trending.loading ? (
+        <Skeleton variant="hero" />
+      ) : (
+        <HeroBanner items={heroItems} />
+      )}
       {rows.map((row) => (
         <MovieRow
           key={row.title}
@@ -53,8 +55,10 @@ export default function Home() {
             ...item,
             media_type: row.type,
           }))}
+          loading={row.list.loading}
         />
       ))}
     </>
   )
 }
+

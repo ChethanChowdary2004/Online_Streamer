@@ -8,33 +8,12 @@ import {
   getAnimeDetail,
   searchTv,
   searchMovies,
-  animeEmbed,
 } from '../api'
 import useFetch from '../hooks/useFetch'
 import VideoPlayer from '../components/VideoPlayer'
 import MovieRow from '../components/MovieRow'
 import AnimeRow from '../components/AnimeRow'
 import { animeTitle } from '../components/AnimeCard'
-
-// Plays everything through VideoPlayer.
-//   /watch/movie/:id  -> MoviePlayer  (WFS + VidLink servers from /api/stream)
-//   /watch/tv/:id     -> TvPlayer     (season + episode, served per episode)
-//   /watch/anime/:id  -> AnimePlayer  (resolves a TMDB id by title, then movie
-//                                      or TV flow; falls back to VIDEASY-only
-//                                      when no TMDB match exists)
-//
-// The player block owns the controls row (Season/Episode/Server dropdowns +
-// Prev/Next), the pause overlay (title/poster/description), and the servers.
-// This page just feeds it the data and renders any similar/related shelves
-// below the player.
-//
-// Anime only knows its AniList ID, so AnimePlayer finds the matching TMDB
-// entry by title — films map to TMDB movies, series to TMDB shows — and reuses
-// that shared flow so anime gets the full server list + pickers. Titles with
-// no TMDB listing still render the same player page, served by VIDEASY from
-// the AniList ID (WFS/VidLink need a TMDB id, so they're absent there).
-// VIDEASY additionally gets a TMDB/AniList toggle (in VideoPlayer) so the same
-// title can be played from either id.
 
 export default function PlayerPage() {
   const { type, id } = useParams()
@@ -51,11 +30,7 @@ export default function PlayerPage() {
   )
 }
 
-// ---- Movies (anime that resolves to a TMDB movie delegates here too) ----
-// `anilistId` + `animeRelations` are only present when reached from the anime
-// flow — they give VIDEASY its TMDB/AniList toggle and swap the "Similar
-// Movies" shelf for "Related Anime".
-function MoviePlayer({ tmdbId, anilistId, animeRelations }) {
+function MoviePlayer({ tmdbId, anilistId, animeRelations, videasyOnly = false }) {
   const { data, error, loading } = useFetch(async () => {
     const d = await getMovieDetail(tmdbId)
     const title = d.title || 'This title'
@@ -77,10 +52,15 @@ function MoviePlayer({ tmdbId, anilistId, animeRelations }) {
       <div className="vplayer-error">
         <h3>No playable video here</h3>
         <p>
-          “{data?.title || 'This title'}” couldn’t be loaded. Try another title.
+          "{data?.title || 'This title'}" couldn't be loaded. Try another title.
         </p>
       </div>
     )
+  }
+
+  let servers = data.servers
+  if (videasyOnly) {
+    servers = servers.filter((s) => s.id === 'videasy')
   }
 
   return (
@@ -88,7 +68,7 @@ function MoviePlayer({ tmdbId, anilistId, animeRelations }) {
       <VideoPlayer
         tmdbId={tmdbId}
         mediaType="movie"
-        servers={data.servers}
+        servers={servers}
         anilistId={anilistId}
         title={data.title}
         description={data.overview}
@@ -102,17 +82,13 @@ function MoviePlayer({ tmdbId, anilistId, animeRelations }) {
   )
 }
 
-// ---- TV shows (anime delegates here after resolving its TMDB id) ----
-// `animeRelations` (from AniList) overrides the "Similar" shelf with related
-// anime when this route was reached from the anime page.
-function TvPlayer({ tmdbId, anilistId, animeRelations }) {
+function TvPlayer({ tmdbId, anilistId, animeRelations, videasyOnly = false }) {
   const { data: tv, error, loading } = useFetch(() => getTvDetail(tmdbId), [
     tmdbId,
   ])
   const [seasonNum, setSeasonNum] = useState(null)
   const [episodeNum, setEpisodeNum] = useState(null)
 
-  // Pickable seasons: skip specials (season 0) and empty ones.
   const seasons = (tv?.seasons || []).filter(
     (s) => s.season_number > 0 && s.episode_count > 0,
   )
@@ -126,7 +102,6 @@ function TvPlayer({ tmdbId, anilistId, animeRelations }) {
   const episodes = seasonFetch.data?.episodes || []
   const activeEpisode = episodeNum ?? episodes[0]?.episode_number ?? null
 
-  // Resolve the embed servers for the currently selected season + episode.
   const stream = useFetch(
     () =>
       activeSeason && activeEpisode
@@ -139,7 +114,11 @@ function TvPlayer({ tmdbId, anilistId, animeRelations }) {
         : Promise.resolve(null),
     [tmdbId, activeSeason, activeEpisode],
   )
-  const servers = stream.data?.servers || []
+  let servers = stream.data?.servers || []
+
+  if (videasyOnly) {
+    servers = servers.filter((s) => s.id === 'videasy')
+  }
 
   if (loading) return <div className="player-loading">Loading series…</div>
 
@@ -147,7 +126,7 @@ function TvPlayer({ tmdbId, anilistId, animeRelations }) {
     return (
       <div className="vplayer-error">
         <h3>No playable video here</h3>
-        <p>This series couldn’t be loaded.</p>
+        <p>This series couldn't be loaded.</p>
       </div>
     )
   }
@@ -164,8 +143,6 @@ function TvPlayer({ tmdbId, anilistId, animeRelations }) {
     label: `${ep.episode_number}. ${ep.name || `Episode ${ep.episode_number}`}`,
   }))
 
-  // Prev/Next within the current season; Next rolls to the following season
-  // when the current one is exhausted.
   const lastEpisode = episodes[episodes.length - 1]?.episode_number ?? activeEpisode
   const nextSeason = seasons.find((s) => s.season_number === activeSeason + 1)
   const canPrev = activeEpisode > 1
@@ -180,7 +157,7 @@ function TvPlayer({ tmdbId, anilistId, animeRelations }) {
       setEpisodeNum(activeEpisode + 1)
     } else if (nextSeason) {
       setSeasonNum(nextSeason.season_number)
-      setEpisodeNum(null) // defaults to the next season's first episode
+      setEpisodeNum(null)
     }
   }
 
@@ -215,8 +192,6 @@ function TvPlayer({ tmdbId, anilistId, animeRelations }) {
           />
         ))}
 
-      {/* Anime reached through the AniList flow: show related anime from
-          AniList; otherwise (or as a fallback) similar shows from TMDB. */}
       {animeRelations && animeRelations.length ? (
         <AnimeRow title="Related Anime" items={animeRelations} />
       ) : (
@@ -230,13 +205,6 @@ function TvPlayer({ tmdbId, anilistId, animeRelations }) {
   )
 }
 
-// ---- Anime (AniList ID -> resolve a TMDB id -> shared movie/TV flow) ----
-// The anime page only tells us the AniList ID, but the shared servers (and the
-// season/episode pickers) need a TMDB id. So: fetch the AniList detail, search
-// TMDB by title to recover its tmdb id, then delegate to the matching flow —
-// anime films resolve to a TMDB movie (MoviePlayer), series to a show
-// (TvPlayer). VIDEASY gets the AniList id too, so VideoPlayer can toggle its
-// embed between the TMDB and AniList ids.
 function AnimePlayer({ anilistId }) {
   const crossover = useFetch(
     () =>
@@ -244,13 +212,9 @@ function AnimePlayer({ anilistId }) {
         const media = d?.Media
         if (!media) return { title: null, tmdbId: null, mediaType: null, relations: [] }
         const title = animeTitle(media.title)
-        // Related/similar anime from AniList relations, anime-only (skip manga).
         const relations = (media.relations?.nodes || []).filter(
           (n) => n.type === 'ANIME',
         )
-        // Anime films live in TMDB as movies, series as shows. Search the type
-        // the format implies first, then fall back to the other type so films
-        // like "Gintama: The Very Final" (a TMDB movie) still resolve.
         const asMovie = media.format === 'MOVIE'
         let res = asMovie ? await searchMovies(title) : await searchTv(title)
         let mediaType = asMovie ? 'movie' : 'tv'
@@ -278,33 +242,27 @@ function AnimePlayer({ anilistId }) {
 
   const { title, tmdbId, mediaType, relations } = crossover.data
 
-  // No TMDB counterpart found (rare/obscure title) — the same player page,
-  // falling back to the AniList-only VIDEASY embed (WFS/VidLink need a TMDB id
-  // this title doesn't have, so they're left off the server list).
-  if (!tmdbId) {
-    return <AnimeEmbedOnly anilistId={anilistId} relations={relations} />
-  }
-
-  // Resolved to a TMDB movie (anime film) -> the movie flow with full servers.
   if (mediaType === 'movie') {
     return (
-      <MoviePlayer tmdbId={tmdbId} anilistId={anilistId} animeRelations={relations} />
+      <MoviePlayer
+        tmdbId={tmdbId}
+        anilistId={anilistId}
+        animeRelations={relations}
+        videasyOnly={!tmdbId}
+      />
     )
   }
 
-  // Resolved to a TMDB show -> the usual series flow.
   return (
     <TvPlayer
       tmdbId={tmdbId}
       anilistId={anilistId}
       animeRelations={relations}
+      videasyOnly={!tmdbId}
     />
   )
 }
 
-// Pick the TMDB entry that best matches a title. Prefers an exact-ish name
-// match among the first few results, otherwise takes the top result. `isMovie`
-// picks the right title field (movies carry `title`, shows carry `name`).
 function pickTmdbShow(results, title, isMovie) {
   if (!results || results.length === 0) return null
   const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/gi, '')
@@ -312,74 +270,4 @@ function pickTmdbShow(results, title, isMovie) {
   const field = isMovie ? 'title' : 'name'
   const exact = results.slice(0, 5).find((r) => norm(r[field]) === target)
   return (exact || results[0]).id
-}
-
-// Player when an anime has no TMDB listing. Same player page as everything
-// else, but a single VIDEASY embed from the AniList ID (movies: /anime/{id};
-// shows: /anime/{id}/{ep}) because the shared servers need a TMDB id this
-// title doesn't have. Related anime still renders below the player.
-function AnimeEmbedOnly({ anilistId, relations }) {
-  const { data, error, loading } = useFetch(() => getAnimeDetail(anilistId), [
-    anilistId,
-  ])
-  const [episode, setEpisode] = useState(null)
-
-  if (loading) return <div className="player-loading">Loading anime…</div>
-
-  if (error || !data?.Media) {
-    return (
-      <div className="vplayer-error">
-        <h3>No playable video here</h3>
-        <p>This anime couldn't be loaded.</p>
-      </div>
-    )
-  }
-
-  const media = data.Media
-  const title = animeTitle(media.title)
-  const isMovie = media.format === 'MOVIE'
-  const episodeCount = media.episodes
-  const activeEpisode = episode ?? 1
-  const showPicker = !isMovie && episodeCount > 1
-
-  // A single server; VIDEASY handles sub/dub switching inside the embed.
-  const servers = [
-    {
-      id: 'videasy',
-      name: 'VIDEASY',
-      embedUrl: animeEmbed(anilistId, isMovie ? null : activeEpisode),
-    },
-  ]
-
-  const episodeNumbers = Array.from(
-    { length: episodeCount || 0 },
-    (_, i) => i + 1,
-  )
-  const episodeOptions = episodeNumbers.map((n) => ({
-    value: String(n),
-    label: `Episode ${n}`,
-  }))
-
-  const canPrev = activeEpisode > 1
-  const canNext = activeEpisode < episodeCount
-
-  return (
-    <div className="player-page">
-      <VideoPlayer
-        servers={servers}
-        title={title}
-        description={media.description || ''}
-        episode={isMovie ? null : activeEpisode}
-        episodeOptions={showPicker ? episodeOptions : []}
-        onEpisodeChange={(val) => setEpisode(val ? Number(val) : null)}
-        onPrev={showPicker ? () => canPrev && setEpisode(activeEpisode - 1) : undefined}
-        onNext={showPicker ? () => canNext && setEpisode(activeEpisode + 1) : undefined}
-        canPrev={canPrev}
-        canNext={canNext}
-      />
-      {relations && relations.length > 0 && (
-        <AnimeRow title="Related Anime" items={relations} />
-      )}
-    </div>
-  )
 }
