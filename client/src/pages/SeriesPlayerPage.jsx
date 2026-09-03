@@ -6,17 +6,19 @@ import {
 } from '../api'
 import useFetch from '../hooks/useFetch'
 import useWatchHistory from '../hooks/useWatchHistory'
+import useContinueWatching from '../hooks/useContinueWatching'
 import VideoPlayer from '../components/VideoPlayer'
 import MovieRow from '../components/MovieRow'
 import AnimeRow from '../components/AnimeRow'
 
-export default function SeriesPlayerPage({ tmdbId, anilistId, animeRelations, videasyOnly = false }) {
+export default function SeriesPlayerPage({ tmdbId, anilistId, animeRelations, videasyOnly = false, resumeState = {} }) {
+  const [seasonNum, setSeasonNum] = useState(resumeState.resumeSeasonNumber || null)
+  const [episodeNum, setEpisodeNum] = useState(resumeState.resumeEpisodeNumber || null)
+  const [selectedServer, setSelectedServer] = useState(resumeState.resumeServerName || null)
+
   const { data: tv, error, loading } = useFetch(() => getTvDetail(tmdbId), [
     tmdbId,
   ])
-  const [seasonNum, setSeasonNum] = useState(null)
-  const [episodeNum, setEpisodeNum] = useState(null)
-
   const seasons = (tv?.seasons || []).filter(
     (s) => s.season_number > 0 && s.episode_count > 0,
   )
@@ -44,13 +46,35 @@ export default function SeriesPlayerPage({ tmdbId, anilistId, animeRelations, vi
   )
   let servers = stream.data?.servers || []
 
-  const title = tv?.name || 'This series'
+  const realTitle = tv?.name
+  const displayTitle = realTitle || 'This series'
   const posterPath = tv?.poster_path
 
-  useWatchHistory('series', tmdbId, title, posterPath, activeSeason, activeEpisode)
+  useWatchHistory('series', tmdbId, realTitle, posterPath || '', activeSeason, activeEpisode)
+
+  useContinueWatching(
+    'series',
+    tmdbId,
+    realTitle,
+    posterPath || '',
+    activeSeason,
+    activeEpisode,
+    selectedServer,
+    episodes.find((e) => e.episode_number === activeEpisode)?.runtime
+      ? episodes.find((e) => e.episode_number === activeEpisode).runtime * 60
+      : null
+  )
 
   if (videasyOnly) {
     servers = servers.filter((s) => s.id === 'videasy')
+  }
+
+  const handleServerChange = (serverId) => {
+    if (serverId === 'auto') {
+      setSelectedServer(null)
+    } else {
+      setSelectedServer(serverId)
+    }
   }
 
   if (loading) return <div className="player-loading">Loading series…</div>
@@ -111,7 +135,7 @@ export default function SeriesPlayerPage({ tmdbId, anilistId, animeRelations, vi
             episode={activeEpisode}
             servers={servers}
             anilistId={anilistId}
-            title={title}
+            title={displayTitle}
             description={overview}
             seasonOptions={seasonOptions}
             episodeOptions={episodeOptions}
@@ -121,6 +145,8 @@ export default function SeriesPlayerPage({ tmdbId, anilistId, animeRelations, vi
             onNext={goNext}
             canPrev={canPrev}
             canNext={canNext}
+            selectedServer={selectedServer}
+            onServerChange={handleServerChange}
           />
         ))}
 

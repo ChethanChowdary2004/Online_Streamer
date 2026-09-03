@@ -5,11 +5,14 @@ import {
 } from '../api'
 import useFetch from '../hooks/useFetch'
 import useWatchHistory from '../hooks/useWatchHistory'
+import useContinueWatching from '../hooks/useContinueWatching'
 import VideoPlayer from '../components/VideoPlayer'
 import MovieRow from '../components/MovieRow'
 import AnimeRow from '../components/AnimeRow'
 
-export default function MoviePlayerPage({ tmdbId, anilistId, animeRelations, videasyOnly = false }) {
+export default function MoviePlayerPage({ tmdbId, anilistId, animeRelations, videasyOnly = false, resumeState = {} }) {
+  const [selectedServer, setSelectedServer] = useState(resumeState.resumeServerName || null)
+
   const { data, error, loading } = useFetch(async () => {
     const d = await getMovieDetail(tmdbId)
     const title = d.title || 'This title'
@@ -22,10 +25,22 @@ export default function MoviePlayerPage({ tmdbId, anilistId, animeRelations, vid
       overview: d.overview || '',
       similar: (d.similar && d.similar.results) || [],
       posterPath: d.poster_path,
+      runtime: d.runtime,
     }
   }, [tmdbId])
 
   useWatchHistory('movie', tmdbId, data?.title || '', data?.posterPath || '')
+
+  useContinueWatching(
+    'movie',
+    tmdbId,
+    data?.title || '',
+    data?.posterPath || '',
+    undefined,
+    undefined,
+    selectedServer,
+    data?.runtime ? data.runtime * 60 : null
+  )
 
   if (loading) return <div className="player-loading">Loading stream…</div>
 
@@ -45,6 +60,14 @@ export default function MoviePlayerPage({ tmdbId, anilistId, animeRelations, vid
     servers = servers.filter((s) => s.id === 'videasy')
   }
 
+  const handleServerChange = (serverId) => {
+    if (serverId === 'auto') {
+      setSelectedServer(null)
+    } else {
+      setSelectedServer(serverId)
+    }
+  }
+
   return (
     <div className="player-page">
       <VideoPlayer
@@ -54,6 +77,8 @@ export default function MoviePlayerPage({ tmdbId, anilistId, animeRelations, vid
         anilistId={anilistId}
         title={data.title}
         description={data.overview}
+        selectedServer={selectedServer}
+        onServerChange={handleServerChange}
       />
       {animeRelations && animeRelations.length ? (
         <AnimeRow title="Related Anime" items={animeRelations} />

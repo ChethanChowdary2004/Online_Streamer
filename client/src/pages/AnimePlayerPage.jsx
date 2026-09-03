@@ -9,11 +9,14 @@ import {
 } from '../api'
 import useFetch from '../hooks/useFetch'
 import useWatchHistory from '../hooks/useWatchHistory'
+import useContinueWatching from '../hooks/useContinueWatching'
 import VideoPlayer from '../components/VideoPlayer'
 import AnimeRow from '../components/AnimeRow'
 import { animeTitle } from '../components/AnimeCard'
 
-export default function AnimePlayerPage({ anilistId }) {
+export default function AnimePlayerPage({ anilistId, resumeState = {} }) {
+  const [selectedServer, setSelectedServer] = useState(resumeState.resumeServerName || null)
+
   const crossover = useFetch(
     () =>
       getAnimeDetail(anilistId).then(async (d) => {
@@ -60,6 +63,8 @@ export default function AnimePlayerPage({ anilistId }) {
         hasTmdbMatch={hasTmdbMatch}
         title={title}
         posterPath={posterPath}
+        selectedServer={selectedServer}
+        onServerChange={setSelectedServer}
       />
     )
   }
@@ -72,19 +77,23 @@ export default function AnimePlayerPage({ anilistId }) {
       hasTmdbMatch={hasTmdbMatch}
       title={title}
       posterPath={posterPath}
+      selectedServer={selectedServer}
+      onServerChange={setSelectedServer}
+      resumeState={resumeState}
     />
   )
 }
 
-function MovieAnimePlayer({ tmdbId, anilistId, animeRelations, hasTmdbMatch, title, posterPath }) {
+function MovieAnimePlayer({ tmdbId, anilistId, animeRelations, hasTmdbMatch, title, posterPath, selectedServer, onServerChange }) {
   const { data, error, loading } = useFetch(async () => {
     const d = await getAnimeDetail(anilistId)
     const media = d?.Media
-    const title = media ? animeTitle(media.title) : 'This anime'
+    const title = media ? animeTitle(media.title) : undefined
     const year = (media?.startDate?.year || '').toString()
 
     let servers = []
     let overview = media?.description || ''
+    let runtime = null
 
     if (hasTmdbMatch && tmdbId) {
       const res = await getStream({
@@ -94,6 +103,10 @@ function MovieAnimePlayer({ tmdbId, anilistId, animeRelations, hasTmdbMatch, tit
         mediaType: 'movie',
       })
       servers = res.servers || []
+      const movieDetail = await fetch(`https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${import.meta.env.VITE_TMDB_API_KEY}`)
+        .then(r => r.json())
+        .catch(() => ({}))
+      runtime = movieDetail.runtime
     } else if (anilistId) {
       servers = [
         {
@@ -117,10 +130,25 @@ function MovieAnimePlayer({ tmdbId, anilistId, animeRelations, hasTmdbMatch, tit
       title,
       servers,
       overview,
+      runtime,
     }
   }, [tmdbId, anilistId, hasTmdbMatch])
 
-  useWatchHistory('anime', anilistId, title, posterPath)
+  const realTitle = data?.title
+  const displayTitle = realTitle || 'This anime'
+
+  useWatchHistory('anime', anilistId, realTitle, posterPath)
+
+  useContinueWatching(
+    'anime',
+    anilistId,
+    realTitle,
+    posterPath,
+    undefined,
+    undefined,
+    selectedServer,
+    data?.runtime ? data.runtime * 60 : null
+  )
 
   if (loading) return <div className="player-loading">Loading stream…</div>
 
@@ -149,6 +177,14 @@ function MovieAnimePlayer({ tmdbId, anilistId, animeRelations, hasTmdbMatch, tit
 
   const selectableServers = servers.filter(s => !s.disabled)
 
+  const handleServerChange = (serverId) => {
+    if (serverId === 'auto') {
+      onServerChange(null)
+    } else {
+      onServerChange(serverId)
+    }
+  }
+
   return (
     <div className="player-page">
       <VideoPlayer
@@ -156,10 +192,12 @@ function MovieAnimePlayer({ tmdbId, anilistId, animeRelations, hasTmdbMatch, tit
         anilistId={anilistId}
         mediaType="movie"
         servers={selectableServers}
-        title={data.title}
+        title={displayTitle}
         description={data.overview}
         isAnime={true}
         hasTmdbMatch={hasTmdbMatch}
+        selectedServer={selectedServer}
+        onServerChange={handleServerChange}
       />
       {animeRelations && animeRelations.length ? (
         <AnimeRow title="Related Anime" items={animeRelations} />
@@ -168,9 +206,9 @@ function MovieAnimePlayer({ tmdbId, anilistId, animeRelations, hasTmdbMatch, tit
   )
 }
 
-function SeriesAnimePlayer({ tmdbId, anilistId, animeRelations, hasTmdbMatch, title, posterPath }) {
-  const [seasonNum, setSeasonNum] = useState(null)
-  const [episodeNum, setEpisodeNum] = useState(null)
+function SeriesAnimePlayer({ tmdbId, anilistId, animeRelations, hasTmdbMatch, title, posterPath, selectedServer, onServerChange, resumeState = {} }) {
+  const [seasonNum, setSeasonNum] = useState(resumeState.resumeSeasonNumber || null)
+  const [episodeNum, setEpisodeNum] = useState(resumeState.resumeEpisodeNumber || null)
 
   const tvDetail = useFetch(
     () => {
@@ -214,7 +252,25 @@ function SeriesAnimePlayer({ tmdbId, anilistId, animeRelations, hasTmdbMatch, ti
     [tmdbId, activeSeason, activeEpisode, hasTmdbMatch],
   )
 
-  useWatchHistory('anime', anilistId, title, posterPath, activeSeason, activeEpisode)
+  const realTitle = title
+  const displayTitle = realTitle || 'This anime'
+
+  if (title) {
+    useWatchHistory('anime', anilistId, realTitle, posterPath, activeSeason, activeEpisode)
+
+    useContinueWatching(
+      'anime',
+      anilistId,
+      realTitle,
+      posterPath,
+      activeSeason,
+      activeEpisode,
+      selectedServer,
+      episodes.find((e) => e.episode_number === activeEpisode)?.runtime
+        ? episodes.find((e) => e.episode_number === activeEpisode).runtime * 60
+        : null
+    )
+  }
 
   let servers = stream.data?.servers || []
 
@@ -247,7 +303,7 @@ function SeriesAnimePlayer({ tmdbId, anilistId, animeRelations, hasTmdbMatch, ti
 
   const animeDetail = useFetch(() => getAnimeDetail(anilistId), [anilistId])
   const tv = tvDetail.data
-  const displayTitle = tv?.name || (animeDetail.data?.Media ? animeTitle(animeDetail.data.Media.title) : 'This anime')
+  const tvDisplayTitle = tv?.name || (animeDetail.data?.Media ? animeTitle(animeDetail.data.Media.title) : 'This anime')
   const overview = tv?.overview || animeDetail.data?.Media?.description || ''
 
   const seasonOptions = seasons.map((s) => ({
@@ -286,6 +342,14 @@ function SeriesAnimePlayer({ tmdbId, anilistId, animeRelations, hasTmdbMatch, ti
     setEpisodeNum(Number(val))
   }
 
+  const handleServerChange = (serverId) => {
+    if (serverId === 'auto') {
+      onServerChange(null)
+    } else {
+      onServerChange(serverId)
+    }
+  }
+
   if (hasTmdbMatch && tvDetail.loading) {
     return <div className="player-loading">Loading series…</div>
   }
@@ -321,6 +385,8 @@ function SeriesAnimePlayer({ tmdbId, anilistId, animeRelations, hasTmdbMatch, ti
           canNext={canNext}
           isAnime={true}
           hasTmdbMatch={hasTmdbMatch}
+          selectedServer={selectedServer}
+          onServerChange={handleServerChange}
         />
       ) : (
         <div className="player-loading">Loading…</div>

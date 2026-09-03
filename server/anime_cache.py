@@ -1,241 +1,181 @@
 """
-Anime data cache using SQLite.
+Anime data cache using Supabase Postgres.
 
-Stores AniList anime data locally to minimize API calls (AniList blocks on
+Stores AniList anime data in Postgres to minimize API calls (AniList blocks on
 repeated requests). Data expires after 6 hours and is refreshed on next access.
 """
-import sqlite3
-import json
-import time
-from datetime import datetime, timedelta
-from pathlib import Path
+import asyncio
+from datetime import datetime, timedelta, timezone
+from auth import supabase_client
 
-DB_PATH = Path(__file__).parent / "anime_cache.db"
-CACHE_DURATION = 6 * 3600  # 6 hours in seconds
+CACHE_DURATION_SECONDS = 6 * 3600
 
 
-def init_db():
-    """Initialize the SQLite database schema."""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
-    # Anime data cache (one row per anime)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS anime (
-            anilist_id INTEGER PRIMARY KEY,
-            title TEXT NOT NULL,
-            data BLOB NOT NULL,
-            cached_at REAL NOT NULL,
-            expires_at REAL NOT NULL
+
+def _expiry_iso() -> str:
+    return (datetime.now(timezone.utc) + timedelta(seconds=CACHE_DURATION_SECONDS)).isoformat()
+
+
+def _is_expired(expires_at_str: str) -> bool:
+    expires_at = datetime.fromisoformat(expires_at_str.replace("Z", "+00:00"))
+    return datetime.now(timezone.utc) > expires_at
+
+
+# ===== ANIME =====
+
+async def get_anime(anilist_id: int) -> dict | None:
+    def _query():
+        return (
+            supabase_client.table("anime_cache")
+            .select("data, expires_at")
+            .eq("anilist_id", anilist_id)
+            .maybe_single()
+            .execute()
         )
-    """)
-
-    # Search results cache (one row per search query)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS search_cache (
-            query TEXT PRIMARY KEY,
-            page INTEGER,
-            data BLOB NOT NULL,
-            cached_at REAL NOT NULL,
-            expires_at REAL NOT NULL
-        )
-    """)
-
-    # Genre/shelf cache (trending, top-rated, latest, movies)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS shelf_cache (
-            shelf_name TEXT NOT NULL,
-            page INTEGER NOT NULL,
-            data BLOB NOT NULL,
-            cached_at REAL NOT NULL,
-            expires_at REAL NOT NULL,
-            PRIMARY KEY (shelf_name, page)
-        )
-    """)
-
-    conn.commit()
-    conn.close()
-
-
-def _is_expired(expires_at: float) -> bool:
-    """Check if a cache entry has expired."""
-    return time.time() > expires_at
-
-
-def get_anime(anilist_id: int) -> dict | None:
-    """Get cached anime data by AniList ID. Returns None if not cached or expired."""
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-
-    cursor.execute(
-        "SELECT data, expires_at FROM anime WHERE anilist_id = ?",
-        (anilist_id,),
-    )
-    row = cursor.fetchone()
-    conn.close()
-
+    resp = await asyncio.to_thread(_query)
+    row = resp.data if resp else None
     if not row:
         return None
-
-    data_blob, expires_at = row
-    if _is_expired(expires_at):
-        delete_anime(anilist_id)
+    if _is_expired(row["expires_at"]):
+        await delete_anime(anilist_id)
         return None
-
-    return json.loads(data_blob)
-
-
-def set_anime(anilist_id: int, title: str, data: dict) -> None:
-    """Cache anime data with AniList ID."""
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-
-    now = time.time()
-    expires_at = now + CACHE_DURATION
-
-    cursor.execute(
-        """
-        INSERT OR REPLACE INTO anime (anilist_id, title, data, cached_at, expires_at)
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        (anilist_id, title, json.dumps(data), now, expires_at),
-    )
-    conn.commit()
-    conn.close()
+    return row["data"]
 
 
-def delete_anime(anilist_id: int) -> None:
-    """Remove anime from cache."""
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM anime WHERE anilist_id = ?", (anilist_id,))
-    conn.commit()
-    conn.close()
+async def set_anime(anilist_id: int, title: str, data: dict) -> None:
+    def _upsert():
+        return (
+            supabase_client.table("anime_cache")
+            .upsert(
+                {
+                    "anilist_id": anilist_id,
+                    "title": title,
+                    "data": data,
+                    "cached_at": _now_iso(),
+                    "expires_at": _expiry_iso(),
+                },
+                on_conflict="anilist_id",
+            )
+            .execute()
+        )
+    await asyncio.to_thread(_upsert)
 
 
-def get_search(query: str, page: int = 1) -> dict | None:
-    """Get cached search results. Returns None if not cached or expired."""
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
+async def delete_anime(anilist_id: int) -> None:
+    def _delete():
+        return (
+            supabase_client.table("anime_cache")
+            .delete()
+            .eq("anilist_id", anilist_id)
+            .execute()
+        )
+    await asyncio.to_thread(_delete)
 
-    cursor.execute(
-        "SELECT data, expires_at FROM search_cache WHERE query = ? AND page = ?",
-        (query, page),
-    )
-    row = cursor.fetchone()
-    conn.close()
 
+# ===== SEARCH =====
+
+async def get_search(query: str, page: int = 1) -> dict | None:
+    def _query_fn():
+        return (
+            supabase_client.table("search_cache")
+            .select("data, expires_at")
+            .eq("query", query)
+            .eq("page", page)
+            .maybe_single()
+            .execute()
+        )
+    resp = await asyncio.to_thread(_query_fn)
+    row = resp.data if resp else None
     if not row:
         return None
-
-    data_blob, expires_at = row
-    if _is_expired(expires_at):
-        delete_search(query, page)
+    if _is_expired(row["expires_at"]):
+        await delete_search(query, page)
         return None
-
-    return json.loads(data_blob)
-
-
-def set_search(query: str, page: int, data: dict) -> None:
-    """Cache search results."""
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-
-    now = time.time()
-    expires_at = now + CACHE_DURATION
-
-    cursor.execute(
-        """
-        INSERT OR REPLACE INTO search_cache (query, page, data, cached_at, expires_at)
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        (query, page, json.dumps(data), now, expires_at),
-    )
-    conn.commit()
-    conn.close()
+    return row["data"]
 
 
-def delete_search(query: str, page: int = None) -> None:
-    """Remove search results from cache."""
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
+async def set_search(query: str, page: int, data: dict) -> None:
+    def _upsert():
+        return (
+            supabase_client.table("search_cache")
+            .upsert(
+                {
+                    "query": query,
+                    "page": page,
+                    "data": data,
+                    "cached_at": _now_iso(),
+                    "expires_at": _expiry_iso(),
+                },
+                on_conflict="query,page",
+            )
+            .execute()
+        )
+    await asyncio.to_thread(_upsert)
 
-    if page:
-        cursor.execute("DELETE FROM search_cache WHERE query = ? AND page = ?", (query, page))
-    else:
-        cursor.execute("DELETE FROM search_cache WHERE query = ?", (query,))
 
-    conn.commit()
-    conn.close()
+async def delete_search(query: str, page: int) -> None:
+    def _delete():
+        return (
+            supabase_client.table("search_cache")
+            .delete()
+            .eq("query", query)
+            .eq("page", page)
+            .execute()
+        )
+    await asyncio.to_thread(_delete)
 
 
-def get_shelf(shelf_name: str, page: int = 1) -> dict | None:
-    """Get cached shelf data (trending, top-rated, etc.). Returns None if not cached or expired."""
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
+# ===== SHELF =====
 
-    cursor.execute(
-        "SELECT data, expires_at FROM shelf_cache WHERE shelf_name = ? AND page = ?",
-        (shelf_name, page),
-    )
-    row = cursor.fetchone()
-    conn.close()
-
+async def get_shelf(shelf_name: str, page: int = 1) -> dict | None:
+    def _query_fn():
+        return (
+            supabase_client.table("shelf_cache")
+            .select("data, expires_at")
+            .eq("shelf_name", shelf_name)
+            .eq("page", page)
+            .maybe_single()
+            .execute()
+        )
+    resp = await asyncio.to_thread(_query_fn)
+    row = resp.data if resp else None
     if not row:
         return None
-
-    data_blob, expires_at = row
-    if _is_expired(expires_at):
-        delete_shelf(shelf_name, page)
+    if _is_expired(row["expires_at"]):
+        await delete_shelf(shelf_name, page)
         return None
-
-    return json.loads(data_blob)
-
-
-def set_shelf(shelf_name: str, page: int, data: dict) -> None:
-    """Cache shelf data."""
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-
-    now = time.time()
-    expires_at = now + CACHE_DURATION
-
-    cursor.execute(
-        """
-        INSERT OR REPLACE INTO shelf_cache (shelf_name, page, data, cached_at, expires_at)
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        (shelf_name, page, json.dumps(data), now, expires_at),
-    )
-    conn.commit()
-    conn.close()
+    return row["data"]
 
 
-def delete_shelf(shelf_name: str, page: int = None) -> None:
-    """Remove shelf data from cache."""
-    init_db()
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
+async def set_shelf(shelf_name: str, page: int, data: dict) -> None:
+    def _upsert():
+        return (
+            supabase_client.table("shelf_cache")
+            .upsert(
+                {
+                    "shelf_name": shelf_name,
+                    "page": page,
+                    "data": data,
+                    "cached_at": _now_iso(),
+                    "expires_at": _expiry_iso(),
+                },
+                on_conflict="shelf_name,page",
+            )
+            .execute()
+        )
+    await asyncio.to_thread(_upsert)
 
-    if page:
-        cursor.execute("DELETE FROM shelf_cache WHERE shelf_name = ? AND page = ?", (shelf_name, page))
-    else:
-        cursor.execute("DELETE FROM shelf_cache WHERE shelf_name = ?", (shelf_name,))
 
-    conn.commit()
-    conn.close()
-
-
-def clear_all() -> None:
-    """Clear all cache data."""
-    if DB_PATH.exists():
-        DB_PATH.unlink()
-    init_db()
+async def delete_shelf(shelf_name: str, page: int) -> None:
+    def _delete():
+        return (
+            supabase_client.table("shelf_cache")
+            .delete()
+            .eq("shelf_name", shelf_name)
+            .eq("page", page)
+            .execute()
+        )
+    await asyncio.to_thread(_delete)

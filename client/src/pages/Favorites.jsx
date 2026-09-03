@@ -96,19 +96,21 @@ export default function Favorites() {
 
             return (
               <div key={fav.id} className="card">
-                <Link to={detailUrl} className="card-poster">
-                  {posterUrl ? (
-                    <img src={posterUrl} alt={fav.title} loading="lazy" />
-                  ) : (
-                    <div className="card-img placeholder">{fav.title.slice(0, 1)}</div>
-                  )}
-                </Link>
-                <FavoriteButton
-                  contentType={fav.content_type}
-                  contentId={fav.content_id}
-                  title={fav.title}
-                  posterPath={fav.poster_path}
-                />
+                <div className="card-poster-wrapper">
+                  <Link to={detailUrl} className="card-poster">
+                    {posterUrl ? (
+                      <img src={posterUrl} alt={fav.title} loading="lazy" />
+                    ) : (
+                      <div className="card-img placeholder">{fav.title.slice(0, 1)}</div>
+                    )}
+                  </Link>
+                  <FavoriteButton
+                    contentType={fav.content_type}
+                    contentId={fav.content_id}
+                    title={fav.title}
+                    posterPath={fav.poster_path}
+                  />
+                </div>
                 <div className="card-title">{fav.title}</div>
               </div>
             )

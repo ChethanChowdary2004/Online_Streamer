@@ -20,11 +20,8 @@ import FilterSelect from './FilterSelect'
 // season/episode dropdowns and prev/next handlers are optional — only series
 // and anime pass them, so movies get just the server dropdown.
 //
-// Info overlay (title/poster/description over the embed): the embeds are
-// sealed cross-origin iframes, so a pause can't be reliably detected from
-// outside. The overlay opens from the "ⓘ Info" button in the controls row,
-// and smart-auto hint sources (window blur / media keys / embed postMessage)
-// open it ~2s after a pause-like signal and close it on resume.
+// Info overlay (title/poster/description over the embed): Manual-only — opens
+// via the "ⓘ Info" button, no auto-detection.
 //
 // Anime-only: when `anilistId` is provided, VIDEASY can play a title from
 // either its TMDB id (the stream server URL) or its AniList id. A small
@@ -49,60 +46,52 @@ export default function VideoPlayer({
   onNext,
   canPrev = false,
   canNext = false,
+  onServerChange: onServerChangeProp,
+  selectedServer,
 }) {
-  const [autoMode, setAutoMode] = useState(true)
+  const [autoMode, setAutoMode] = useState(!selectedServer)
   const [attempt, setAttempt] = useState(0)
-  const [pinned, setPinned] = useState(null)
+  const [pinned, setPinned] = useState(selectedServer || null)
   const [lastError, setLastError] = useState(false)
   const [retryKey, setRetryKey] = useState(0)
   const [useAnilistId, setUseAnilistId] = useState(false)
 
-  // Info overlay (title/poster/description). The embeds are sealed cross-origin
-  // iframes, so there's no reliable way to detect a pause from outside — the
-  // overlay therefore opens from three sources:
-  //   1. Manual "ⓘ Info" button in the controls row — always works, on every
-  //      server.
-  //   2. Smart auto — a message hinting "paused" opens it after ~2s, and a
-  //      "resumed"/focus signal closes it. Hint sources: the parent window
-  //      losing focus (the user clicked into the player), the media-session
-  //      'pause' action (hardware media keys), or an embed reporting state via
-  //      postMessage (best-effort free win).
+  // Info overlay (title/poster/description). Manual-only — opens/closes via
+  // the "ⓘ Info" button in the controls row.
   const [overlayOpen, setOverlayOpen] = useState(false)
-  const autoTimer = useRef(null)
-  // After the user dismisses the overlay (they're resuming), clicking back into
-  // the player blurs this window again — suppress that blur for a beat so the
-  // overlay doesn't instantly re-pop over a now-playing video.
-  const suppressBlurUntil = useRef(0)
-
-  const openOverlay = useCallback(() => setOverlayOpen(true), [])
-
-  const closeOverlay = useCallback(() => {
-    if (autoTimer.current) clearTimeout(autoTimer.current)
-    setOverlayOpen(false)
-  }, [])
-
-  // Treat a pause-like signal as "open after a beat" and a resume-like signal
-  // as "close now" (also cancels a pending open).
-  const scheduleAuto = useCallback(
-    (paused) => {
-      if (autoTimer.current) clearTimeout(autoTimer.current)
-      if (paused) autoTimer.current = setTimeout(openOverlay, 2000)
-      else closeOverlay()
-    },
-    [openOverlay, closeOverlay],
-  )
 
   const toggleOverlay = () => {
-    if (autoTimer.current) clearTimeout(autoTimer.current)
     setOverlayOpen((o) => !o)
   }
 
-  // Click-to-dismiss: the embed is sealed so we can't detect the actual
-  // "resume" click inside it — the next click on the player closes the overlay
-  // instead (and that's almost always the resume click).
   const dismissOverlay = () => {
-    suppressBlurUntil.current = Date.now() + 2500
-    closeOverlay()
+    setOverlayOpen(false)
+  }
+
+  const setVideasyMode = (mode) => {
+    setUseAnilistId(mode === 'anilist')
+    setLastError(false)
+    setRetryKey((k) => k + 1)
+  }
+
+  const retry = () => {
+    setLastError(false)
+    setRetryKey((k) => k + 1)
+  }
+
+  const pickManual = (id) => {
+    setLastError(false)
+    setPinned(id)
+    setAutoMode(false)
+    if (onServerChangeProp) onServerChangeProp(id)
+  }
+
+  const pickAuto = () => {
+    setLastError(false)
+    setAttempt(0)
+    setPinned(null)
+    setAutoMode(true)
+    if (onServerChangeProp) onServerChangeProp('auto')
   }
 
   // single-serving fallback for pages that don't hand us a servers list
@@ -143,92 +132,6 @@ export default function VideoPlayer({
   }
 
   const embedUrl = buildEmbedUrl(active, useAnilistId)
-
-  // Free win: embeds that report player state via postMessage drive the
-  // overlay. Common message shapes are accepted; unknown messages are ignored,
-  // so unrelated page messages never flip it.
-  useEffect(() => {
-    const onMessage = (e) => {
-      const d = e?.data
-      if (!d || typeof d !== 'object') return
-      let paused = null
-      const type = typeof d.type === 'string' ? d.type.toLowerCase() : ''
-      if (type === 'pause' || type === 'paused') paused = true
-      else if (type === 'play' || type === 'playing') paused = false
-      else if (d.event === 'pause') paused = true
-      else if (d.event === 'play') paused = false
-      else if (d.playing === false || d.paused === true) paused = true
-      else if (d.playing === true || d.paused === false) paused = false
-      else if (d.state === 'paused' || d.state === 'pause' || d.status === 'paused') paused = true
-      else if (d.state === 'playing' || d.state === 'play' || d.status === 'playing') paused = false
-      if (paused !== null) scheduleAuto(paused)
-    }
-    window.addEventListener('message', onMessage)
-    return () => window.removeEventListener('message', onMessage)
-  }, [scheduleAuto])
-
-  // Smart-ish heuristic: clicking inside a cross-origin iframe moves focus out
-  // of our window (blur) — which is exactly when someone pauses. Open the
-  // overlay ~2s later; coming back (focus) closes it. A blur arriving right
-  // after a click-to-dismiss (i.e. the resume click, which also blurs us) is
-  // suppressed so the overlay doesn't re-pop over a now-playing video.
-  useEffect(() => {
-    const onBlur = () => {
-      if (Date.now() < suppressBlurUntil.current) return
-      scheduleAuto(true)
-    }
-    const onFocus = () => {
-      suppressBlurUntil.current = Date.now() + 2500
-      scheduleAuto(false)
-    }
-    window.addEventListener('blur', onBlur)
-    window.addEventListener('focus', onFocus)
-    return () => {
-      window.removeEventListener('blur', onBlur)
-      window.removeEventListener('focus', onFocus)
-      if (autoTimer.current) clearTimeout(autoTimer.current)
-    }
-  }, [scheduleAuto])
-
-  // Bonus: hardware media keys ("pause"/"play") map onto the overlay.
-  useEffect(() => {
-    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return
-    const ms = navigator.mediaSession
-    try {
-      ms.setActionHandler('pause', () => scheduleAuto(true))
-      ms.setActionHandler('play', () => scheduleAuto(false))
-    } catch { /* older browsers */ }
-    return () => {
-      try {
-        ms.setActionHandler('pause', null)
-        ms.setActionHandler('play', null)
-      } catch { /* noop */ }
-    }
-  }, [scheduleAuto])
-
-  const setVideasyMode = (mode) => {
-    setVideasyAnilist(mode === 'anilist')
-    setLastError(false)
-    setRetryKey((k) => k + 1)
-  }
-
-  const retry = () => {
-    setLastError(false)
-    setRetryKey((k) => k + 1)
-  }
-
-  const pickManual = (id) => {
-    setLastError(false)
-    setPinned(id)
-    setAutoMode(false)
-  }
-
-  const pickAuto = () => {
-    setLastError(false)
-    setAttempt(0)
-    setPinned(null)
-    setAutoMode(true)
-  }
 
   const onIframeError = () => {
     setLastError(true)
@@ -312,7 +215,7 @@ export default function VideoPlayer({
         {/* Info overlay — hero-banner style: the poster becomes a dimmed full-bleed
             backdrop, and the "Now Playing" label + title + description sit on
             the right side of the player. Opened manually via the ⓘ Info
-            button, or automatically after a pause-like signal. */}
+            button. */}
         {title && overlayOpen && (
           <div
             className="vp-overlay"
@@ -373,14 +276,14 @@ export default function VideoPlayer({
               <button
                 type="button"
                 className={!useAnilistId ? 'active' : ''}
-                onClick={() => setUseAnilistId(false)}
+                onClick={() => setVideasyMode('tmdb')}
               >
                 TMDB
               </button>
               <button
                 type="button"
                 className={useAnilistId ? 'active' : ''}
-                onClick={() => setUseAnilistId(true)}
+                onClick={() => setVideasyMode('anilist')}
               >
                 AniList
               </button>
