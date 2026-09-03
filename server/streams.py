@@ -182,3 +182,6 @@ async def resolve(
         # First server is the one Auto starts with.
         "defaultServer": servers[0]["id"] if servers else None,
     }
+
+
+'''to test a deployment'''
