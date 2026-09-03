@@ -7,13 +7,14 @@ freely-streamable video sources (public-domain Archive.org films).
 Run with:
     .venv/Scripts/python -m uvicorn main:app --reload --port 8000
 """
-from fastapi import FastAPI, HTTPException, Request, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 import anilist
 import streams
 import tmdb
+from auth import get_current_user
 
 app = FastAPI(title="Online Streamer API", version="0.1.0")
 
@@ -176,6 +177,11 @@ async def anime_search(q: str = Query(..., min_length=1), page: int = Query(1, g
 async def anime_genres() -> dict:
     """Anime genre tags for the filter dropdown."""
     return await anilist.genres()
+
+@app.get("/api/me")
+async def read_users_me(current_user: dict = Depends(get_current_user)):
+    """Returns the current authenticated user's profile info from the JWT token."""
+    return current_user
 
 
 @app.get("/api/anime/genre/{genre}")

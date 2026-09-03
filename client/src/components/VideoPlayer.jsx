@@ -55,7 +55,7 @@ export default function VideoPlayer({
   const [pinned, setPinned] = useState(null)
   const [lastError, setLastError] = useState(false)
   const [retryKey, setRetryKey] = useState(0)
-  const [videasyAnilist, setVideasyAnilist] = useState(false)
+  const [useAnilistId, setUseAnilistId] = useState(false)
 
   // Info overlay (title/poster/description). The embeds are sealed cross-origin
   // iframes, so there's no reliable way to detect a pause from outside — the
@@ -120,17 +120,29 @@ export default function VideoPlayer({
     ? list[Math.min(attempt, list.length - 1)]
     : list.find((s) => s.id === pinned) || null
 
-  // Anime-only: VIDEASY can play from either the TMDB id (the stream server's
-  // URL) or the AniList id. `isVideasyActive` gates the toggle, and the
-  // override swaps the embed URL when the user has flipped to AniList.
-  const isVideasyActive = Boolean(active && active.id === 'videasy')
-  const anilistUrl = anilistId ? animeEmbed(anilistId, episode) : ''
-  const embedUrl =
-    isVideasyActive && videasyAnilist && anilistUrl
-      ? anilistUrl
-      : active
-        ? active.embedUrl
-        : ''
+  // Check if active server supports both TMDB and AniList
+  const serverSupportsBoth = Boolean(active && active.supportsAnilist)
+
+  // Build embed URL with toggle support
+  const buildEmbedUrl = (server, useAnilist) => {
+    if (!server || !server.embedUrl) return ''
+
+    // If toggle is enabled and server supports both TMDB and AniList,
+    // we need to swap the ID in the URL
+    if (useAnilist && server.supportsAnilist && anilistId) {
+      // Replace TMDB ID with AniList ID in the URL
+      const url = server.embedUrl
+      // This assumes the backend already built URLs with TMDB ID
+      // We'll swap it with AniList ID
+      const tmdbIdStr = String(tmdbId)
+      const anilistIdStr = String(anilistId)
+      return url.replace(tmdbIdStr, anilistIdStr)
+    }
+
+    return server.embedUrl
+  }
+
+  const embedUrl = buildEmbedUrl(active, useAnilistId)
 
   // Free win: embeds that report player state via postMessage drive the
   // overlay. Common message shapes are accepted; unknown messages are ignored,
@@ -355,20 +367,20 @@ export default function VideoPlayer({
             options={serverOptions}
           />
 
-          {anilistId && isVideasyActive && (
+          {anilistId && serverSupportsBoth && (
             <div className="videasy-toggle">
               <span className="videasy-toggle-label">Source</span>
               <button
                 type="button"
-                className={!videasyAnilist ? 'active' : ''}
-                onClick={() => setVideasyMode('tmdb')}
+                className={!useAnilistId ? 'active' : ''}
+                onClick={() => setUseAnilistId(false)}
               >
                 TMDB
               </button>
               <button
                 type="button"
-                className={videasyAnilist ? 'active' : ''}
-                onClick={() => setVideasyMode('anilist')}
+                className={useAnilistId ? 'active' : ''}
+                onClick={() => setUseAnilistId(true)}
               >
                 AniList
               </button>

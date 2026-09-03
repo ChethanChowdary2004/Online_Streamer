@@ -5,6 +5,7 @@ import {
   getStream,
 } from '../api'
 import useFetch from '../hooks/useFetch'
+import useWatchHistory from '../hooks/useWatchHistory'
 import VideoPlayer from '../components/VideoPlayer'
 import MovieRow from '../components/MovieRow'
 import AnimeRow from '../components/AnimeRow'
@@ -43,6 +44,11 @@ export default function SeriesPlayerPage({ tmdbId, anilistId, animeRelations, vi
   )
   let servers = stream.data?.servers || []
 
+  const title = tv?.name || 'This series'
+  const posterPath = tv?.poster_path
+
+  useWatchHistory('series', tmdbId, title, posterPath, activeSeason, activeEpisode)
+
   if (videasyOnly) {
     servers = servers.filter((s) => s.id === 'videasy')
   }
@@ -58,7 +64,6 @@ export default function SeriesPlayerPage({ tmdbId, anilistId, animeRelations, vi
     )
   }
 
-  const title = tv.name || 'This series'
   const overview = tv.overview || ''
 
   const seasonOptions = seasons.map((s) => ({

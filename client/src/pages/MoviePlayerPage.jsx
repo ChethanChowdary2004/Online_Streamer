@@ -4,6 +4,7 @@ import {
   getStream,
 } from '../api'
 import useFetch from '../hooks/useFetch'
+import useWatchHistory from '../hooks/useWatchHistory'
 import VideoPlayer from '../components/VideoPlayer'
 import MovieRow from '../components/MovieRow'
 import AnimeRow from '../components/AnimeRow'
@@ -20,8 +21,11 @@ export default function MoviePlayerPage({ tmdbId, anilistId, animeRelations, vid
       servers: res.servers || [],
       overview: d.overview || '',
       similar: (d.similar && d.similar.results) || [],
+      posterPath: d.poster_path,
     }
   }, [tmdbId])
+
+  useWatchHistory('movie', tmdbId, data?.title || '', data?.posterPath || '')
 
   if (loading) return <div className="player-loading">Loading stream…</div>
 

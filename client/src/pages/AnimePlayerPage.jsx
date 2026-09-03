@@ -8,6 +8,7 @@ import {
   getTvSeason,
 } from '../api'
 import useFetch from '../hooks/useFetch'
+import useWatchHistory from '../hooks/useWatchHistory'
 import VideoPlayer from '../components/VideoPlayer'
 import AnimeRow from '../components/AnimeRow'
 import { animeTitle } from '../components/AnimeCard'
@@ -17,7 +18,7 @@ export default function AnimePlayerPage({ anilistId }) {
     () =>
       getAnimeDetail(anilistId).then(async (d) => {
         const media = d?.Media
-        if (!media) return { title: null, tmdbId: null, mediaType: null, relations: [] }
+        if (!media) return { title: null, tmdbId: null, mediaType: null, relations: [], anilistId: null }
         const title = animeTitle(media.title)
         const relations = (media.relations?.nodes || []).filter(
           (n) => n.type === 'ANIME',
@@ -31,7 +32,7 @@ export default function AnimePlayerPage({ anilistId }) {
           mediaType = asMovie ? 'tv' : 'movie'
           tmdbId = pickTmdbShow(res?.results, title, mediaType)
         }
-        return { title, tmdbId, mediaType, relations }
+        return { title, tmdbId, mediaType, relations, anilistId: media.id, posterPath: media.coverImage?.large }
       }),
     [anilistId],
   )
@@ -47,15 +48,18 @@ export default function AnimePlayerPage({ anilistId }) {
     )
   }
 
-  const { title, tmdbId, mediaType, relations } = crossover.data
+  const { title, tmdbId, mediaType, relations, anilistId: mediaAnilistId, posterPath } = crossover.data
+  const hasTmdbMatch = Boolean(tmdbId)
 
   if (mediaType === 'movie') {
     return (
       <MovieAnimePlayer
         tmdbId={tmdbId}
-        anilistId={anilistId}
+        anilistId={mediaAnilistId}
         animeRelations={relations}
-        hasTmdbMatch={Boolean(tmdbId)}
+        hasTmdbMatch={hasTmdbMatch}
+        title={title}
+        posterPath={posterPath}
       />
     )
   }
@@ -63,35 +67,60 @@ export default function AnimePlayerPage({ anilistId }) {
   return (
     <SeriesAnimePlayer
       tmdbId={tmdbId}
-      anilistId={anilistId}
+      anilistId={mediaAnilistId}
       animeRelations={relations}
-      hasTmdbMatch={Boolean(tmdbId)}
+      hasTmdbMatch={hasTmdbMatch}
+      title={title}
+      posterPath={posterPath}
     />
   )
 }
 
-function MovieAnimePlayer({ tmdbId, anilistId, animeRelations, hasTmdbMatch }) {
+function MovieAnimePlayer({ tmdbId, anilistId, animeRelations, hasTmdbMatch, title, posterPath }) {
   const { data, error, loading } = useFetch(async () => {
-    if (!tmdbId) return { title: null, servers: [], overview: '' }
-
     const d = await getAnimeDetail(anilistId)
     const media = d?.Media
     const title = media ? animeTitle(media.title) : 'This anime'
     const year = (media?.startDate?.year || '').toString()
 
-    const res = await getStream({
-      tmdbId,
-      title,
-      year,
-      mediaType: 'movie',
-    })
+    let servers = []
+    let overview = media?.description || ''
+
+    if (hasTmdbMatch && tmdbId) {
+      const res = await getStream({
+        tmdbId,
+        title,
+        year,
+        mediaType: 'movie',
+      })
+      servers = res.servers || []
+    } else if (anilistId) {
+      servers = [
+        {
+          id: 'vidrift',
+          name: 'VidRift',
+          embedUrl: `https://embed.vidrift.in/embed/movie/${anilistId}`,
+          supportsAnilist: false,
+          disabled: false,
+        },
+        {
+          id: 'vidbolt',
+          name: 'VidBolt',
+          embedUrl: `https://vidbolt.xyz/anime/${anilistId}`,
+          supportsAnilist: false,
+          disabled: false,
+        },
+      ]
+    }
 
     return {
       title,
-      servers: res.servers || [],
-      overview: media?.description || '',
+      servers,
+      overview,
     }
-  }, [tmdbId, anilistId])
+  }, [tmdbId, anilistId, hasTmdbMatch])
+
+  useWatchHistory('anime', anilistId, title, posterPath)
 
   if (loading) return <div className="player-loading">Loading stream…</div>
 
@@ -99,9 +128,7 @@ function MovieAnimePlayer({ tmdbId, anilistId, animeRelations, hasTmdbMatch }) {
     return (
       <div className="vplayer-error">
         <h3>No playable video here</h3>
-        <p>
-          "{data?.title || 'This anime'}" doesn't have a TMDB entry. Try searching for it on the anime page.
-        </p>
+        <p>This anime couldn't be found on any supported server.</p>
       </div>
     )
   }
@@ -109,9 +136,15 @@ function MovieAnimePlayer({ tmdbId, anilistId, animeRelations, hasTmdbMatch }) {
   let servers = data.servers
 
   if (!hasTmdbMatch) {
-    servers = buildRestrictedAnimeServers(servers)
+    servers = servers.map((server) => ({
+      ...server,
+      disabled: !['vidrift', 'vidbolt'].includes(server.id),
+    }))
   } else {
-    servers = buildFullAnimeServers(servers)
+    servers = servers.map((server) => ({
+      ...server,
+      disabled: false,
+    }))
   }
 
   const selectableServers = servers.filter(s => !s.disabled)
@@ -135,70 +168,87 @@ function MovieAnimePlayer({ tmdbId, anilistId, animeRelations, hasTmdbMatch }) {
   )
 }
 
-function SeriesAnimePlayer({ tmdbId, anilistId, animeRelations, hasTmdbMatch }) {
+function SeriesAnimePlayer({ tmdbId, anilistId, animeRelations, hasTmdbMatch, title, posterPath }) {
   const [seasonNum, setSeasonNum] = useState(null)
   const [episodeNum, setEpisodeNum] = useState(null)
 
   const tvDetail = useFetch(
     () => {
-      if (!tmdbId) return Promise.resolve(null)
-      return getTvDetail(tmdbId)
+      if (hasTmdbMatch && tmdbId) {
+        return getTvDetail(tmdbId)
+      }
+      return Promise.resolve(null)
     },
-    [tmdbId],
+    [tmdbId, hasTmdbMatch],
   )
 
   const seasons = (tvDetail.data?.seasons || []).filter(
     (s) => s.season_number > 0 && s.episode_count > 0,
   )
-  const activeSeason = seasonNum ?? seasons[0]?.season_number ?? null
+  const activeSeason = seasonNum ?? seasons[0]?.season_number ?? 1
+  const activeEpisode = episodeNum ?? 1
 
   const seasonFetch = useFetch(
     () => {
-      if (!activeSeason) return Promise.resolve(null)
-      return getTvSeason(tmdbId, activeSeason)
+      if (hasTmdbMatch && tmdbId && activeSeason) {
+        return getTvSeason(tmdbId, activeSeason)
+      }
+      return Promise.resolve(null)
     },
-    [tmdbId, activeSeason],
+    [tmdbId, activeSeason, hasTmdbMatch],
   )
   const episodes = seasonFetch.data?.episodes || []
-  const activeEpisode = episodeNum ?? episodes[0]?.episode_number ?? null
 
   const stream = useFetch(
-    () =>
-      activeSeason && activeEpisode && tmdbId
-        ? getStream({
-            tmdbId,
-            mediaType: 'tv',
-            season: activeSeason,
-            episode: activeEpisode,
-          })
-        : Promise.resolve(null),
-    [tmdbId, activeSeason, activeEpisode],
+    () => {
+      if (hasTmdbMatch && tmdbId && activeSeason && activeEpisode) {
+        return getStream({
+          tmdbId,
+          mediaType: 'tv',
+          season: activeSeason,
+          episode: activeEpisode,
+        })
+      }
+      return Promise.resolve(null)
+    },
+    [tmdbId, activeSeason, activeEpisode, hasTmdbMatch],
   )
+
+  useWatchHistory('anime', anilistId, title, posterPath, activeSeason, activeEpisode)
 
   let servers = stream.data?.servers || []
 
   if (!hasTmdbMatch) {
-    servers = buildRestrictedAnimeServers(servers)
+    servers = [
+      {
+        id: 'vidrift',
+        name: 'VidRift',
+        embedUrl: `https://embed.vidrift.in/embed/tv/${anilistId}/1/${activeEpisode}`,
+        supportsAnilist: false,
+        disabled: false,
+      },
+      {
+        id: 'vidbolt',
+        name: 'VidBolt',
+        embedUrl: `https://vidbolt.xyz/anime/${anilistId}/${activeEpisode}`,
+        supportsAnilist: false,
+        disabled: false,
+      },
+    ]
   } else {
-    servers = buildFullAnimeServers(servers)
+    servers = servers.map((server) => ({
+      ...server,
+      disabled: false,
+      supportsAnilist: ['vidrift', 'vidbolt'].includes(server.id) ? true : false,
+    }))
   }
 
   const selectableServers = servers.filter(s => !s.disabled)
 
-  if (tvDetail.loading) return <div className="player-loading">Loading series…</div>
-
-  if (tvDetail.error || !tvDetail.data) {
-    return (
-      <div className="vplayer-error">
-        <h3>No playable video here</h3>
-        <p>This anime couldn't be loaded.</p>
-      </div>
-    )
-  }
-
+  const animeDetail = useFetch(() => getAnimeDetail(anilistId), [anilistId])
   const tv = tvDetail.data
-  const title = tv.name || 'This anime'
-  const overview = tv.overview || ''
+  const displayTitle = tv?.name || (animeDetail.data?.Media ? animeTitle(animeDetail.data.Media.title) : 'This anime')
+  const overview = tv?.overview || animeDetail.data?.Media?.description || ''
 
   const seasonOptions = seasons.map((s) => ({
     value: String(s.season_number),
@@ -210,7 +260,7 @@ function SeriesAnimePlayer({ tmdbId, anilistId, animeRelations, hasTmdbMatch }) 
   }))
 
   const lastEpisode = episodes[episodes.length - 1]?.episode_number ?? activeEpisode
-  const nextSeason = seasons.find((s) => s.season_number === activeSeason + 1)
+  const nextSeason = hasTmdbMatch && seasons.find((s) => s.season_number === activeSeason + 1)
   const canPrev = activeEpisode > 1
   const canNext = activeEpisode < lastEpisode || Boolean(nextSeason)
 
@@ -232,54 +282,55 @@ function SeriesAnimePlayer({ tmdbId, anilistId, animeRelations, hasTmdbMatch }) 
     setEpisodeNum(null)
   }
 
+  const changeEpisode = (val) => {
+    setEpisodeNum(Number(val))
+  }
+
+  if (hasTmdbMatch && tvDetail.loading) {
+    return <div className="player-loading">Loading series…</div>
+  }
+
+  if (hasTmdbMatch && tvDetail.error) {
+    return (
+      <div className="vplayer-error">
+        <h3>No playable video here</h3>
+        <p>This anime couldn't be loaded.</p>
+      </div>
+    )
+  }
+
   return (
     <div className="player-page">
-      {activeSeason && activeEpisode &&
-        (stream.loading && !selectableServers.length ? (
-          <div className="player-loading">Loading player…</div>
-        ) : (
-          <VideoPlayer
-            tmdbId={tmdbId}
-            anilistId={anilistId}
-            mediaType="tv"
-            season={activeSeason}
-            episode={activeEpisode}
-            servers={selectableServers}
-            title={title}
-            description={overview}
-            seasonOptions={seasonOptions}
-            episodeOptions={episodeOptions}
-            onSeasonChange={changeSeason}
-            onEpisodeChange={setEpisodeNum}
-            onPrev={goPrev}
-            onNext={goNext}
-            canPrev={canPrev}
-            canNext={canNext}
-            isAnime={true}
-            hasTmdbMatch={hasTmdbMatch}
-          />
-        ))}
+      {activeSeason && activeEpisode ? (
+        <VideoPlayer
+          tmdbId={tmdbId}
+          anilistId={anilistId}
+          mediaType="tv"
+          season={activeSeason}
+          episode={activeEpisode}
+          servers={selectableServers}
+          title={displayTitle}
+          description={overview}
+          seasonOptions={hasTmdbMatch ? seasonOptions : []}
+          episodeOptions={hasTmdbMatch ? episodeOptions : []}
+          onSeasonChange={hasTmdbMatch ? changeSeason : undefined}
+          onEpisodeChange={changeEpisode}
+          onPrev={hasTmdbMatch ? goPrev : undefined}
+          onNext={hasTmdbMatch ? goNext : undefined}
+          canPrev={canPrev}
+          canNext={canNext}
+          isAnime={true}
+          hasTmdbMatch={hasTmdbMatch}
+        />
+      ) : (
+        <div className="player-loading">Loading…</div>
+      )}
 
       {animeRelations && animeRelations.length ? (
         <AnimeRow title="Related Anime" items={animeRelations} />
       ) : null}
     </div>
   )
-}
-
-function buildFullAnimeServers(servers) {
-  return servers.map((server) => ({
-    ...server,
-    disabled: false,
-  }))
-}
-
-function buildRestrictedAnimeServers(servers) {
-  const anilistOnlyIds = new Set(['vidrift', 'vidbolt'])
-  return servers.map((server) => ({
-    ...server,
-    disabled: !anilistOnlyIds.has(server.id),
-  }))
 }
 
 function pickTmdbShow(results, title, isMovie) {
