@@ -41,9 +41,11 @@ export default function Topbar({
 }) {
   const [query, setQuery] = useState('')
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [navMenuOpen, setNavMenuOpen] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState(null)
   const dropdownRef = useRef(null)
+  const navMenuRef = useRef(null)
   const fileInputRef = useRef(null)
   const navigate = useNavigate()
   const location = useLocation()
@@ -59,6 +61,21 @@ export default function Topbar({
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [dropdownOpen])
+
+  useEffect(() => {
+    if (!navMenuOpen) return
+    function handleClick(e) {
+      if (navMenuRef.current && !navMenuRef.current.contains(e.target)) {
+        setNavMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [navMenuOpen])
+
+  useEffect(() => {
+    setNavMenuOpen(false)
+  }, [location.pathname])
 
   const submit = (e) => {
     e.preventDefault()
@@ -150,6 +167,35 @@ export default function Topbar({
         <img src="/yugostream_title_transparent.png" alt="YUGOSTREAM" className="navbar-brand-image" />
       </Link>
 
+      <div className="mobile-menu-wrapper" ref={navMenuRef}>
+        <button
+          type="button"
+          className={`mobile-menu-toggle ${navMenuOpen ? 'active' : ''}`}
+          onClick={() => setNavMenuOpen((v) => !v)}
+          aria-label="Open navigation menu"
+          title="Open navigation menu"
+          aria-expanded={navMenuOpen}
+          aria-controls="mobile-topbar-nav"
+        >
+          <span />
+          <span />
+          <span />
+        </button>
+        {navMenuOpen && (
+          <nav id="mobile-topbar-nav" className="mobile-menu-dropdown" aria-label="Primary navigation">
+            {navLinks.map((link) => (
+              <Link
+                key={link.to}
+                to={link.to}
+                className={`mobile-menu-link ${location.pathname === link.to ? 'active' : ''}`}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+        )}
+      </div>
+
       <nav className="nav-links">
         {navLinks.map((link) => (
           <Link
@@ -182,16 +228,17 @@ export default function Topbar({
           />
         </div>
       ) : (
-        !isBrowsedPage && (
-          <form className="navbar-search" onSubmit={submit}>
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search movies & shows…"
-              aria-label="Search"
-            />
-          </form>
-        )
+        <form
+          className={`navbar-search ${isBrowsedPage ? 'mobile-only-search' : ''}`}
+          onSubmit={submit}
+        >
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search movies & shows…"
+            aria-label="Search"
+          />
+        </form>
       )}
 
       <div className="navbar-right">

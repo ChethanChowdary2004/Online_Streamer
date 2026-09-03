@@ -3,6 +3,7 @@ import { Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
 import { FavoritesProvider } from './context/FavoritesContext'
 import Topbar from './components/Topbar'
+import MobileNav from './components/MobileNav'
 import Home from './pages/Home'
 import Movies from './pages/Movies'
 import Series from './pages/Series'
@@ -56,6 +57,7 @@ export default function App() {
             <Route path="*" element={<Home />} />
           </Routes>
         </main>
+        <MobileNav />
       </FavoritesProvider>
     </AuthProvider>
   )
