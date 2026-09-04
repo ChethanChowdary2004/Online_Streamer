@@ -10,11 +10,14 @@ no TMDB normalization. The anime-specific frontend components consume these
 fields directly.
 """
 import asyncio
+import logging
 import time
 
 import httpx
 
 import anime_cache
+
+logger = logging.getLogger(__name__)
 
 ANILIST_API = "https://graphql.anilist.co"
 
@@ -49,7 +52,7 @@ startDate { year }
 TRENDING_QUERY = """
 query ($page: Int) {
   Page(page: $page, perPage: 12) {
-    media(type: ANIME, sort: TRENDING_DESC) {
+    media(type: ANIME, isAdult: false, sort: TRENDING_DESC) {
       id
       coverImage { large extraLarge }
       bannerImage
@@ -70,7 +73,7 @@ query ($page: Int) {
 TOP_RATED_QUERY = """
 query ($page: Int) {
   Page(page: $page, perPage: 20) {
-    media(type: ANIME, sort: SCORE_DESC) {
+    media(type: ANIME, isAdult: false, sort: SCORE_DESC) {
       id
       coverImage { large extraLarge }
       bannerImage
@@ -91,7 +94,7 @@ query ($page: Int) {
 LATEST_QUERY = """
 query ($page: Int) {
   Page(page: $page, perPage: 20) {
-    media(type: ANIME, status: RELEASING, sort: START_DATE_DESC) {
+    media(type: ANIME, isAdult: false, status: RELEASING, sort: START_DATE_DESC) {
       id
       coverImage { large extraLarge }
       bannerImage
@@ -112,7 +115,7 @@ query ($page: Int) {
 MOVIES_QUERY = """
 query ($page: Int) {
   Page(page: $page, perPage: 20) {
-    media(type: ANIME, format: MOVIE, sort: SCORE_DESC) {
+    media(type: ANIME, isAdult: false, format: MOVIE, sort: SCORE_DESC) {
       id
       coverImage { large extraLarge }
       bannerImage
@@ -134,7 +137,7 @@ SEARCH_QUERY = """
 query ($page: Int, $q: String) {
   Page(page: $page, perPage: 20) {
     pageInfo { hasNextPage total }
-    media(type: ANIME, search: $q) {
+    media(type: ANIME, isAdult: false, search: $q) {
       id
       coverImage { large extraLarge }
       bannerImage
@@ -156,7 +159,7 @@ GENRE_QUERY = """
 query ($page: Int, $genre: String) {
   Page(page: $page, perPage: 20) {
     pageInfo { hasNextPage total }
-    media(type: ANIME, genre: $genre, sort: POPULARITY_DESC) {
+    media(type: ANIME, isAdult: false, genre: $genre, sort: POPULARITY_DESC) {
       id
       coverImage { large extraLarge }
       bannerImage
@@ -184,6 +187,7 @@ DETAIL_QUERY = """
 query ($id: Int) {
   Media(id: $id, type: ANIME) {
     id
+    isAdult
     coverImage { large extraLarge }
     bannerImage
     title { romaji english native }
@@ -236,124 +240,194 @@ async def _post(query: str, variables: dict | None = None) -> dict:
             await asyncio.sleep(wait)
         _last_request_at = time.monotonic()
 
-    resp = await get_client().post(
-        ANILIST_API,
-        json={"query": query, "variables": variables or {}},
-    )
-
-    # Transient rate limit: back off by Retry-After (default 1s) and retry once.
-    # A 429 that survives the retry becomes a RuntimeError so main.py returns a
-    # clean 503 to the client instead of an unhandled 500.
-    if resp.status_code == 429:
-        retry_after = float(resp.headers.get("Retry-After", "1") or 1)
-        await asyncio.sleep(retry_after)
+    try:
         resp = await get_client().post(
             ANILIST_API,
             json={"query": query, "variables": variables or {}},
         )
-        if resp.status_code == 429:
-            raise RuntimeError(
-                "AniList is rate-limiting requests right now — try again shortly."
-            )
 
-    resp.raise_for_status()
-    data = resp.json()
-    if data.get("errors"):
-        raise RuntimeError(f"AniList: {data['errors'][0]['message']}")
-    return data.get("data") or {}
+        # Transient rate limit: back off by Retry-After (default 1s) and retry once.
+        # A 429 that survives the retry becomes a RuntimeError so main.py returns a
+        # clean 503 to the client instead of an unhandled 500.
+        if resp.status_code == 429:
+            retry_after = float(resp.headers.get("Retry-After", "1") or 1)
+            await asyncio.sleep(retry_after)
+            resp = await get_client().post(
+                ANILIST_API,
+                json={"query": query, "variables": variables or {}},
+            )
+            if resp.status_code == 429:
+                raise RuntimeError(
+                    "AniList is rate-limiting requests right now — try again shortly."
+                )
+
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("errors"):
+            raise RuntimeError(f"AniList: {data['errors'][0]['message']}")
+        return data.get("data") or {}
+    except httpx.ConnectError as e:
+        raise RuntimeError(f"AniList is unreachable: {e}") from e
+    except httpx.TimeoutException as e:
+        raise RuntimeError(f"AniList request timed out: {e}") from e
+    except httpx.HTTPError as e:
+        raise RuntimeError(f"AniList request failed: {e}") from e
 
 
 async def trending(page: int = 1) -> dict:
     """Anime ordered by daily trending score. Uses cache to minimize API calls."""
-    cached = await anime_cache.get_shelf("trending", page)
-    if cached:
-        return cached
-
-    result = await _post(TRENDING_QUERY, {"page": page})
-    await anime_cache.set_shelf("trending", page, result)
-    return result
+    try:
+        result = await _post(TRENDING_QUERY, {"page": page})
+        result["_source"] = "live"
+        await anime_cache.set_shelf("trending", page, result)
+        return result
+    except RuntimeError as e:
+        logger.warning(f"AniList live call failed for trending(page={page}): {str(e)} — falling back to cache")
+        cached, cached_at = await anime_cache.get_shelf("trending", page, ignore_expiry=True)
+        if cached is not None:
+            cached["_source"] = "cache"
+            cached["_cached_at"] = cached_at
+            return cached
+        logger.error(f"AniList failed AND no cache available for trending(page={page}): {str(e)} — returning 503 to client")
+        raise
 
 
 async def top_rated(page: int = 1) -> dict:
     """Anime ordered by average score. Uses cache to minimize API calls."""
-    cached = await anime_cache.get_shelf("top-rated", page)
-    if cached:
-        return cached
-
-    result = await _post(TOP_RATED_QUERY, {"page": page})
-    await anime_cache.set_shelf("top-rated", page, result)
-    return result
+    try:
+        result = await _post(TOP_RATED_QUERY, {"page": page})
+        result["_source"] = "live"
+        await anime_cache.set_shelf("top-rated", page, result)
+        return result
+    except RuntimeError as e:
+        logger.warning(f"AniList live call failed for top_rated(page={page}): {str(e)} — falling back to cache")
+        cached, cached_at = await anime_cache.get_shelf("top-rated", page, ignore_expiry=True)
+        if cached is not None:
+            cached["_source"] = "cache"
+            cached["_cached_at"] = cached_at
+            return cached
+        logger.error(f"AniList failed AND no cache available for top_rated(page={page}): {str(e)} — returning 503 to client")
+        raise
 
 
 async def latest(page: int = 1) -> dict:
     """Currently releasing anime, newest first. Uses cache to minimize API calls."""
-    cached = await anime_cache.get_shelf("latest", page)
-    if cached:
-        return cached
-
-    result = await _post(LATEST_QUERY, {"page": page})
-    await anime_cache.set_shelf("latest", page, result)
-    return result
+    try:
+        result = await _post(LATEST_QUERY, {"page": page})
+        result["_source"] = "live"
+        await anime_cache.set_shelf("latest", page, result)
+        return result
+    except RuntimeError as e:
+        logger.warning(f"AniList live call failed for latest(page={page}): {str(e)} — falling back to cache")
+        cached, cached_at = await anime_cache.get_shelf("latest", page, ignore_expiry=True)
+        if cached is not None:
+            cached["_source"] = "cache"
+            cached["_cached_at"] = cached_at
+            return cached
+        logger.error(f"AniList failed AND no cache available for latest(page={page}): {str(e)} — returning 503 to client")
+        raise
 
 
 async def movies(page: int = 1) -> dict:
     """Anime films (format: MOVIE) ordered by score. Uses cache to minimize API calls."""
-    cached = await anime_cache.get_shelf("movies", page)
-    if cached:
-        return cached
-
-    result = await _post(MOVIES_QUERY, {"page": page})
-    await anime_cache.set_shelf("movies", page, result)
-    return result
+    try:
+        result = await _post(MOVIES_QUERY, {"page": page})
+        result["_source"] = "live"
+        await anime_cache.set_shelf("movies", page, result)
+        return result
+    except RuntimeError as e:
+        logger.warning(f"AniList live call failed for movies(page={page}): {str(e)} — falling back to cache")
+        cached, cached_at = await anime_cache.get_shelf("movies", page, ignore_expiry=True)
+        if cached is not None:
+            cached["_source"] = "cache"
+            cached["_cached_at"] = cached_at
+            return cached
+        logger.error(f"AniList failed AND no cache available for movies(page={page}): {str(e)} — returning 503 to client")
+        raise
 
 
 async def search(q: str, page: int = 1) -> dict:
     """Fuzzy title search across anime. Uses cache to minimize API calls."""
-    cached = await anime_cache.get_search(q, page)
-    if cached:
-        return cached
-
-    result = await _post(SEARCH_QUERY, {"page": page, "q": q})
-    await anime_cache.set_search(q, page, result)
-    return result
+    try:
+        result = await _post(SEARCH_QUERY, {"page": page, "q": q})
+        result["_source"] = "live"
+        await anime_cache.set_search(q, page, result)
+        return result
+    except RuntimeError as e:
+        logger.warning(f"AniList live call failed for search(q={q!r}, page={page}): {str(e)} — falling back to cache")
+        cached, cached_at = await anime_cache.get_search(q, page, ignore_expiry=True)
+        if cached is not None:
+            cached["_source"] = "cache"
+            cached["_cached_at"] = cached_at
+            return cached
+        logger.error(f"AniList failed AND no cache available for search(q={q!r}, page={page}): {str(e)} — returning 503 to client")
+        raise
 
 
 async def by_genre(genre: str, page: int = 1) -> dict:
     """One page of anime under a single genre tag, most popular first. Uses cache."""
     cache_key = f"genre_{genre}"
-    cached = await anime_cache.get_shelf(cache_key, page)
-    if cached:
-        return cached
-
-    result = await _post(GENRE_QUERY, {"page": page, "genre": genre})
-    await anime_cache.set_shelf(cache_key, page, result)
-    return result
+    try:
+        result = await _post(GENRE_QUERY, {"page": page, "genre": genre})
+        result["_source"] = "live"
+        await anime_cache.set_shelf(cache_key, page, result)
+        return result
+    except RuntimeError as e:
+        logger.warning(f"AniList live call failed for by_genre(genre={genre!r}, page={page}): {str(e)} — falling back to cache")
+        cached, cached_at = await anime_cache.get_shelf(cache_key, page, ignore_expiry=True)
+        if cached is not None:
+            cached["_source"] = "cache"
+            cached["_cached_at"] = cached_at
+            return cached
+        logger.error(f"AniList failed AND no cache available for by_genre(genre={genre!r}, page={page}): {str(e)} — returning 503 to client")
+        raise
 
 
 async def genres() -> dict:
     """All anime genre tags (for the filter dropdown). Cached separately."""
-    cached = await anime_cache.get_shelf("genres", 1)
-    if cached:
-        return cached
+    try:
+        result = await _post(GENRES_QUERY)
 
-    result = await _post(GENRES_QUERY)
-    await anime_cache.set_shelf("genres", 1, result)
-    return result
+        # Explicit filter for adult content tags
+        if "GenreCollection" in result and isinstance(result["GenreCollection"], list):
+            result["GenreCollection"] = [g for g in result["GenreCollection"] if g and g.lower() != "hentai"]
+
+        result["_source"] = "live"
+        await anime_cache.set_shelf("genres", 1, result)
+        return result
+    except RuntimeError as e:
+        logger.warning(f"AniList live call failed for genres(): {str(e)} — falling back to cache")
+        cached, cached_at = await anime_cache.get_shelf("genres", 1, ignore_expiry=True)
+        if cached is not None:
+            cached["_source"] = "cache"
+            cached["_cached_at"] = cached_at
+            return cached
+        logger.error(f"AniList failed AND no cache available for genres(): {str(e)} — returning 503 to client")
+        raise
 
 
 async def detail(anilist_id: int) -> dict:
     """Full detail for one title: synopsis, studio, format, relations, episodes.
     Uses cache with AniList ID as key to minimize API calls.
     """
-    cached = await anime_cache.get_anime(anilist_id)
-    if cached:
-        return cached
+    try:
+        result = await _post(DETAIL_QUERY, {"id": anilist_id})
 
-    result = await _post(DETAIL_QUERY, {"id": anilist_id})
+        # Block adult content before caching
+        media = result.get("Media", {})
+        if media.get("isAdult"):
+            raise RuntimeError(f"Adult content not available: {anilist_id}")
 
-    # Extract title for display/logging
-    media = result.get("Media", {})
-    title = media.get("title", {}).get("romaji", f"Anime {anilist_id}")
-
-    await anime_cache.set_anime(anilist_id, title, result)
-    return result
+        title = media.get("title", {}).get("romaji", f"Anime {anilist_id}")
+        result["_source"] = "live"
+        await anime_cache.set_anime(anilist_id, title, result)
+        return result
+    except RuntimeError as e:
+        logger.warning(f"AniList live call failed for detail(anilist_id={anilist_id}): {str(e)} — falling back to cache")
+        cached, cached_at = await anime_cache.get_anime(anilist_id, ignore_expiry=True)
+        if cached is not None:
+            cached["_source"] = "cache"
+            cached["_cached_at"] = cached_at
+            return cached
+        logger.error(f"AniList failed AND no cache available for detail(anilist_id={anilist_id}): {str(e)} — returning 503 to client")
+        raise

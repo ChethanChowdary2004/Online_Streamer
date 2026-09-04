@@ -25,13 +25,18 @@ export default function MovieCard({ item, type }) {
             </div>
           )}
           {poster ? (
-            <img
-              src={poster}
-              alt={title}
-              loading="lazy"
-              onLoad={() => setImageLoaded(true)}
-              style={{ opacity: imageLoaded ? 1 : 0, transition: 'opacity 0.3s ease' }}
-            />
+            <>
+              <img
+                src={poster}
+                alt={title}
+                loading="lazy"
+                onLoad={() => setImageLoaded(true)}
+                style={{ opacity: imageLoaded ? 1 : 0, transition: 'opacity 0.3s ease' }}
+              />
+              {rating && rating !== 'NR' && (
+                <span className="rating-badge">★ {rating}</span>
+              )}
+            </>
           ) : (
             <div className="card-img placeholder">{title.slice(0, 1)}</div>
           )}
@@ -45,7 +50,6 @@ export default function MovieCard({ item, type }) {
       </div>
       <div className="card-title">{title}</div>
       <div className="card-meta">
-        <span className="rating">★ {rating}</span>
         {year && <span>{year}</span>}
       </div>
     </div>

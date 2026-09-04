@@ -22,7 +22,12 @@ export default function AnimeCard({ item }) {
       <div className="card-poster-wrapper">
         <Link to={`/anime/${id}`} className="card-poster">
           {poster ? (
-            <img src={poster} alt={title} loading="lazy" />
+            <>
+              <img src={poster} alt={title} loading="lazy" />
+              {rating && (
+                <span className="rating-badge">★ {rating}</span>
+              )}
+            </>
           ) : (
             <div className="card-img placeholder">{title.slice(0, 1)}</div>
           )}
@@ -36,7 +41,6 @@ export default function AnimeCard({ item }) {
       </div>
       <div className="card-title">{title}</div>
       <div className="card-meta">
-        {rating && <span className="rating">★ {rating}</span>}
         {year && <span>{year}</span>}
       </div>
     </div>

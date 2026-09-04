@@ -8,7 +8,7 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 from auth import supabase_client
 
-CACHE_DURATION_SECONDS = 6 * 3600
+CACHE_DURATION_SECONDS = 2 * 3600
 
 
 def _now_iso() -> str:
@@ -26,11 +26,11 @@ def _is_expired(expires_at_str: str) -> bool:
 
 # ===== ANIME =====
 
-async def get_anime(anilist_id: int) -> dict | None:
+async def get_anime(anilist_id: int, ignore_expiry: bool = False) -> tuple[dict | None, str | None]:
     def _query():
         return (
             supabase_client.table("anime_cache")
-            .select("data, expires_at")
+            .select("data, expires_at, cached_at")
             .eq("anilist_id", anilist_id)
             .maybe_single()
             .execute()
@@ -38,11 +38,11 @@ async def get_anime(anilist_id: int) -> dict | None:
     resp = await asyncio.to_thread(_query)
     row = resp.data if resp else None
     if not row:
-        return None
-    if _is_expired(row["expires_at"]):
+        return None, None
+    if not ignore_expiry and _is_expired(row["expires_at"]):
         await delete_anime(anilist_id)
-        return None
-    return row["data"]
+        return None, None
+    return row["data"], row["cached_at"]
 
 
 async def set_anime(anilist_id: int, title: str, data: dict) -> None:
@@ -77,11 +77,11 @@ async def delete_anime(anilist_id: int) -> None:
 
 # ===== SEARCH =====
 
-async def get_search(query: str, page: int = 1) -> dict | None:
+async def get_search(query: str, page: int = 1, ignore_expiry: bool = False) -> tuple[dict | None, str | None]:
     def _query_fn():
         return (
             supabase_client.table("search_cache")
-            .select("data, expires_at")
+            .select("data, expires_at, cached_at")
             .eq("query", query)
             .eq("page", page)
             .maybe_single()
@@ -90,11 +90,11 @@ async def get_search(query: str, page: int = 1) -> dict | None:
     resp = await asyncio.to_thread(_query_fn)
     row = resp.data if resp else None
     if not row:
-        return None
-    if _is_expired(row["expires_at"]):
+        return None, None
+    if not ignore_expiry and _is_expired(row["expires_at"]):
         await delete_search(query, page)
-        return None
-    return row["data"]
+        return None, None
+    return row["data"], row["cached_at"]
 
 
 async def set_search(query: str, page: int, data: dict) -> None:
@@ -130,11 +130,11 @@ async def delete_search(query: str, page: int) -> None:
 
 # ===== SHELF =====
 
-async def get_shelf(shelf_name: str, page: int = 1) -> dict | None:
+async def get_shelf(shelf_name: str, page: int = 1, ignore_expiry: bool = False) -> tuple[dict | None, str | None]:
     def _query_fn():
         return (
             supabase_client.table("shelf_cache")
-            .select("data, expires_at")
+            .select("data, expires_at, cached_at")
             .eq("shelf_name", shelf_name)
             .eq("page", page)
             .maybe_single()
@@ -143,11 +143,11 @@ async def get_shelf(shelf_name: str, page: int = 1) -> dict | None:
     resp = await asyncio.to_thread(_query_fn)
     row = resp.data if resp else None
     if not row:
-        return None
-    if _is_expired(row["expires_at"]):
+        return None, None
+    if not ignore_expiry and _is_expired(row["expires_at"]):
         await delete_shelf(shelf_name, page)
-        return None
-    return row["data"]
+        return None, None
+    return row["data"], row["cached_at"]
 
 
 async def set_shelf(shelf_name: str, page: int, data: dict) -> None:

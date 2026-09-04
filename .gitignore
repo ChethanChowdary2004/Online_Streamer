@@ -10,6 +10,9 @@ client/dist/
 # Secrets
 server/.env
 
+# Logs
+server/logs/
+
 # OS / editor
 .DS_Store
 Thumbs.db
