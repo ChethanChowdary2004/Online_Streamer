@@ -1,10 +1,11 @@
-// Client-side API layer. All calls go through the Vite dev proxy (/api) to the
-// FastAPI backend, so the TMDB API key never reaches the browser.
+// Client-side API layer. All calls point directly to the FastAPI backend URL
+// (resolved via Vite env), so the TMDB API key never reaches the browser.
 
+export const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 const IMAGE_BASE = 'https://image.tmdb.org/t/p'
 
 async function getJSON(url) {
-  const res = await fetch(url)
+  const res = await fetch(`${API_BASE_URL}${url}`)
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.detail || `Request failed (${res.status})`)
