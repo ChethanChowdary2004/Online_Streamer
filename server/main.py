@@ -7,9 +7,6 @@ freely-streamable video sources (public-domain Archive.org films).
 Run with:
     .venv/Scripts/python -m uvicorn main:app --reload --port 8000
 """
-import logging
-import os
-
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -18,20 +15,6 @@ import anilist
 import streams
 import tmdb
 from auth import get_current_user
-
-log_dir = os.path.join(os.path.dirname(__file__), 'logs')
-os.makedirs(log_dir, exist_ok=True)
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler(os.path.join(log_dir, 'app.log'))
-    ]
-)
-
-logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Online Streamer API", version="0.1.0")
 
@@ -187,19 +170,13 @@ ANIME_SHELVES = {
 @app.get("/api/anime/search")
 async def anime_search(q: str = Query(..., min_length=1), page: int = Query(1, ge=1)) -> dict:
     """Anime title search (AniList fuzzy match)."""
-    result = await anilist.search(q, page)
-    if result.get("_source") == "cache":
-        logger.info(f"Served /api/anime/search from cache (cached_at: {result.get('_cached_at')}) — AniList call failed")
-    return result
+    return await anilist.search(q, page)
 
 
 @app.get("/api/anime/genres")
 async def anime_genres() -> dict:
     """Anime genre tags for the filter dropdown."""
-    result = await anilist.genres()
-    if result.get("_source") == "cache":
-        logger.info(f"Served /api/anime/genres from cache (cached_at: {result.get('_cached_at')}) — AniList call failed")
-    return result
+    return await anilist.genres()
 
 @app.get("/api/me")
 async def read_users_me(current_user: dict = Depends(get_current_user)):
@@ -210,19 +187,13 @@ async def read_users_me(current_user: dict = Depends(get_current_user)):
 @app.get("/api/anime/genre/{genre}")
 async def anime_genre_list(genre: str, page: int = Query(1, ge=1, le=100)) -> dict:
     """Browse shelf: anime under a single genre tag, most popular first."""
-    result = await anilist.by_genre(genre, page)
-    if result.get("_source") == "cache":
-        logger.info(f"Served /api/anime/genre/{genre} from cache (cached_at: {result.get('_cached_at')}) — AniList call failed")
-    return result
+    return await anilist.by_genre(genre, page)
 
 
 @app.get("/api/anime/{anilist_id}/detail")
 async def anime_detail(anilist_id: int) -> dict:
     """Full anime detail: synopsis, studio, format, genres, episodes, relations."""
-    result = await anilist.detail(anilist_id)
-    if result.get("_source") == "cache":
-        logger.info(f"Served /api/anime/{anilist_id}/detail from cache (cached_at: {result.get('_cached_at')}) — AniList call failed")
-    return result
+    return await anilist.detail(anilist_id)
 
 
 @app.get("/api/anime/{list}")
@@ -230,10 +201,7 @@ async def anime_list(list: str, page: int = Query(1, ge=1, le=100)) -> dict:
     """Anime shelf: /api/anime/{trending|top-rated|latest|movies}."""
     if list not in ANIME_SHELVES:
         raise HTTPException(404, f"Unknown anime list: {list}")
-    result = await ANIME_SHELVES[list](page)
-    if result.get("_source") == "cache":
-        logger.info(f"Served /api/anime/{list} from cache (cached_at: {result.get('_cached_at')}) — AniList call failed")
-    return result
+    return await ANIME_SHELVES[list](page)
 
 
 @app.get("/api/stream")

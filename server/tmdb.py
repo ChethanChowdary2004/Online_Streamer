@@ -23,10 +23,7 @@ def get_client() -> httpx.AsyncClient:
     """Return a lazily-created shared HTTPX client."""
     global _client
     if _client is None or _client.is_closed:
-        _client = httpx.AsyncClient(
-            timeout=20,
-            limits=httpx.Limits(max_keepalive_connections=5, keepalive_expiry=30.0),
-        )
+        _client = httpx.AsyncClient(timeout=20)
     return _client
 
 
@@ -40,21 +37,9 @@ async def tmdb(path: str, params: dict | None = None) -> dict:
         )
     params = dict(params or {})
     params["api_key"] = TMDB_API_KEY
-
-    last_error = None
-    for attempt in range(2):
-        try:
-            resp = await get_client().get(f"{TMDB_BASE_URL}{path}", params=params)
-            resp.raise_for_status()
-            return resp.json()
-        except httpx.ConnectError as e:
-            last_error = e
-            global _client
-            if _client is not None:
-                await _client.aclose()
-                _client = None  # force a brand-new client on retry
-
-    raise last_error
+    resp = await get_client().get(f"{TMDB_BASE_URL}{path}", params=params)
+    resp.raise_for_status()
+    return resp.json()
 
 
 def image_url(path: str | None, size: str = "w500") -> str:
