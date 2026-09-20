@@ -1,20 +1,31 @@
 import { supabase } from './lib/supabase'
 
-// Client-side API layer. All calls go through the Vite dev proxy (/api) to the
-// FastAPI backend, so the TMDB API key never reaches the browser.
+// Client-side API layer. In dev, Vite proxies /api to the FastAPI backend.
+// In production, VITE_API_URL must be set to the full backend origin
+// (e.g. https://online-streamer-mub3.onrender.com) so requests aren't sent
+// as relative paths to the Vercel host.
 
-export const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+const _raw = import.meta.env.VITE_API_URL
+if (!_raw) {
+  console.error(
+    '[api] VITE_API_URL is not set. API calls will use a relative path and ' +
+    'will 404 on any host that does not proxy /api to the backend. ' +
+    'Set VITE_API_URL=https://online-streamer-mub3.onrender.com in Vercel ' +
+    'Settings → Environment Variables, scoped to Production.'
+  )
+}
+export const API_BASE = (_raw || '').replace(/\/$/, '')
+
 const IMAGE_BASE = 'https://image.tmdb.org/t/p'
 
-async function getJSON(url) {
+async function getJSON(path) {
+  const url = `${API_BASE}${path}`
   const headers = {}
 
   // Attach auth token if available, but only for our backend API calls
-  if (url.startsWith('/api/')) {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (session?.access_token) {
-      headers['Authorization'] = `Bearer ${session.access_token}`
-    }
+  const { data: { session } } = await supabase.auth.getSession()
+  if (session?.access_token) {
+    headers['Authorization'] = `Bearer ${session.access_token}`
   }
 
   const res = await fetch(url, { headers })
