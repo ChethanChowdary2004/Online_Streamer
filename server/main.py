@@ -29,7 +29,11 @@ async def runtime_error_handler(_request: Request, exc: RuntimeError):
 app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=r"https://online-streamer.*\.vercel\.app",
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://yugostream.vercel.app",
+    ],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
