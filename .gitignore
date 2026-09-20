@@ -9,12 +9,17 @@ client/dist/
 
 # Secrets
 server/.env
+client/.env
 
 # OS / editor
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/
+
+server/logs/app.log
+
+server/logs/app.log
 
 #logs
 server/logs/app.log

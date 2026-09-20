@@ -4,21 +4,16 @@ import {
   getMovieList,
   getTvList,
   discoverMovies,
-  discoverTv,
 } from '../api'
 import useFetch from '../hooks/useFetch'
 import HeroBanner from '../components/HeroBanner'
 import MovieRow from '../components/MovieRow'
-
-// Anime is a keyword shelf on TMDB (there is no "anime" genre), so it goes
-// through the discover endpoint rather than a plain list.
-const ANIME_KEYWORD = 210024
+import Skeleton from '../components/Skeleton'
 
 export default function Home() {
   const trending = useFetch(() => getTrending())
   const popularMovies = useFetch(() => getMovieList('popular'))
   const popularSeries = useFetch(() => getTvList('popular'))
-  const popularAnime = useFetch(() => discoverTv({ with_keywords: ANIME_KEYWORD }))
   const topRatedMovies = useFetch(() => getMovieList('top_rated'))
   const actionAdventure = useFetch(() => discoverMovies({ with_genres: '28,12' }))
   const comedy = useFetch(() => discoverMovies({ with_genres: '35' }))
@@ -35,13 +30,9 @@ export default function Home() {
     [trending.data],
   )
 
-  // Show the spinner until the hero is ready; rows appear as they load.
-  if (trending.loading) return <div className="spinner" />
-
   const rows = [
     { title: 'Popular Movies', list: popularMovies, type: 'movie' },
     { title: 'Popular Series', list: popularSeries, type: 'tv' },
-    { title: 'Popular Anime', list: popularAnime, type: 'tv' },
     { title: 'Top Rated Movies', list: topRatedMovies, type: 'movie' },
     { title: 'Action & Adventure', list: actionAdventure, type: 'movie' },
     { title: 'Comedy', list: comedy, type: 'movie' },
@@ -51,7 +42,11 @@ export default function Home() {
 
   return (
     <>
-      <HeroBanner items={heroItems} />
+      {trending.loading ? (
+        <Skeleton variant="hero" />
+      ) : (
+        <HeroBanner items={heroItems} />
+      )}
       {rows.map((row) => (
         <MovieRow
           key={row.title}
@@ -60,8 +55,10 @@ export default function Home() {
             ...item,
             media_type: row.type,
           }))}
+          loading={row.list.loading}
         />
       ))}
     </>
   )
 }
+
