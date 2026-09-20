@@ -789,7 +789,9 @@ button {
   font-weight: 400;
   letter-spacing: 0.3px;
   font-size: 24px;
-  margin: 0 var(--space-10) var(--space-3);
+  margin: 0 var(--space-10) var(--space-3) 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--accent);
 }
 
 .row {
@@ -1486,6 +1488,45 @@ button {
   color: #fff;
 }
 
+/* Per-server TMDB/AniList source toggle chips (anime only) */
+.server-id-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.server-id-toggle-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-right: var(--space-1);
+}
+
+.server-id-toggle button {
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background var(--fast) var(--ease), border-color var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+
+.server-id-toggle button:hover {
+  border-color: var(--accent);
+}
+
+.server-id-toggle button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 /* VIDEASY TMDB/AniList source toggle (anime only) */
 .videasy-toggle {
   display: flex;
@@ -1567,6 +1608,11 @@ button {
 }
 
 .player-controls .videasy-toggle {
+  margin-top: 0;
+  padding: 0 var(--space-1);
+}
+
+.player-controls .server-id-toggle {
   margin-top: 0;
   padding: 0 var(--space-1);
 }
@@ -1695,7 +1741,7 @@ button {
 
 /* ---------- Series page ---------- */
 .series-page {
-  padding: var(--space-6) var(--space-10) 60px;
+  padding: var(--space-6) 0 60px;
 }
 
 .series-title {
@@ -2020,7 +2066,7 @@ button {
 
 @media (max-width: 640px) {
   .series-page {
-    padding: 16px 16px 40px;
+    padding: 16px 0 40px;
   }
 
   .series-title {
@@ -3123,7 +3169,7 @@ button {
 
   .shelf h2 {
     font-size: 20px;
-    margin: 0 var(--space-4) var(--space-3);
+    margin: 0 var(--space-4) var(--space-3) 0;
   }
 
   .row {
@@ -3197,7 +3243,7 @@ button {
 
   /* Movies/Series/Anime grids */
   .series-page {
-    padding: var(--space-4) var(--space-4) var(--space-6);
+    padding: var(--space-4) 0 var(--space-6);
   }
 
   .series-title {
@@ -3454,7 +3500,6 @@ button {
     scroll-padding-inline: var(--space-5);
   }
 
-  .shelf h2,
   .grid,
   .detail,
   .player-page,
@@ -3464,12 +3509,12 @@ button {
   }
 
   .shelf h2 {
-    margin-left: var(--space-5);
+    margin-left: 0;
     margin-right: var(--space-5);
   }
 
   .series-page {
-    padding: var(--space-4) var(--space-5) 40px;
+    padding: var(--space-4) 0 40px;
   }
 
   .series-title {

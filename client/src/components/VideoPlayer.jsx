@@ -49,12 +49,11 @@ export default function VideoPlayer({
   onServerChange: onServerChangeProp,
   selectedServer,
 }) {
-  const [autoMode, setAutoMode] = useState(!selectedServer)
-  const [attempt, setAttempt] = useState(0)
   const [pinned, setPinned] = useState(selectedServer || null)
   const [lastError, setLastError] = useState(false)
   const [retryKey, setRetryKey] = useState(0)
-  const [useAnilistId, setUseAnilistId] = useState(false)
+  // Per-server AniList/TMDB toggle: keyed by server id, value is true = use AniList
+  const [serverUseAnilist, setServerUseAnilist] = useState({})
 
   // Info overlay (title/poster/description). Manual-only — opens/closes via
   // the "ⓘ Info" button in the controls row.
@@ -68,8 +67,8 @@ export default function VideoPlayer({
     setOverlayOpen(false)
   }
 
-  const setVideasyMode = (mode) => {
-    setUseAnilistId(mode === 'anilist')
+  const toggleServerMode = (serverId) => {
+    setServerUseAnilist((prev) => ({ ...prev, [serverId]: !prev[serverId] }))
     setLastError(false)
     setRetryKey((k) => k + 1)
   }
@@ -82,16 +81,7 @@ export default function VideoPlayer({
   const pickManual = (id) => {
     setLastError(false)
     setPinned(id)
-    setAutoMode(false)
     if (onServerChangeProp) onServerChangeProp(id)
-  }
-
-  const pickAuto = () => {
-    setLastError(false)
-    setAttempt(0)
-    setPinned(null)
-    setAutoMode(true)
-    if (onServerChangeProp) onServerChangeProp('auto')
   }
 
   // single-serving fallback for pages that don't hand us a servers list
@@ -105,41 +95,21 @@ export default function VideoPlayer({
   const list =
     servers && servers.length ? servers : fallback ? [{ id: 'wfs', name: 'WFS', embedUrl: fallback }] : []
 
-  const active = autoMode
-    ? list[Math.min(attempt, list.length - 1)]
-    : list.find((s) => s.id === pinned) || null
+  const active = list.find((s) => s.id === pinned) || list[0] || null
 
-  // Check if active server supports both TMDB and AniList
-  const serverSupportsBoth = Boolean(active && active.supportsAnilist)
-
-  // Build embed URL with toggle support
-  const buildEmbedUrl = (server, useAnilist) => {
-    if (!server || !server.embedUrl) return ''
-
-    // If toggle is enabled and server supports both TMDB and AniList,
-    // we need to swap the ID in the URL
-    if (useAnilist && server.supportsAnilist && anilistId) {
-      // Replace TMDB ID with AniList ID in the URL
-      const url = server.embedUrl
-      // This assumes the backend already built URLs with TMDB ID
-      // We'll swap it with AniList ID
-      const tmdbIdStr = String(tmdbId)
-      const anilistIdStr = String(anilistId)
-      return url.replace(tmdbIdStr, anilistIdStr)
+  // Build embed URL: use anilistEmbedUrl when the per-server toggle is set to AniList
+  const getEmbedUrl = (server) => {
+    if (!server) return ''
+    if (server.supportsAnilist && server.anilistEmbedUrl && serverUseAnilist[server.id]) {
+      return server.anilistEmbedUrl
     }
-
-    return server.embedUrl
+    return server.embedUrl || ''
   }
 
-  const embedUrl = buildEmbedUrl(active, useAnilistId)
+  const embedUrl = getEmbedUrl(active)
 
   const onIframeError = () => {
     setLastError(true)
-    if (autoMode && attempt < list.length - 1) {
-      // fall through to the next server automatically
-      setAttempt((a) => a + 1)
-      setRetryKey((k) => k + 1)
-    }
   }
 
   if (!list.length) {
@@ -153,13 +123,10 @@ export default function VideoPlayer({
     )
   }
 
-  // Server dropdown options: "Auto" plus each named server.
-  const serverOptions = [
-    { value: 'auto', label: `Auto — ${active?.name || 'next'}` },
-    ...list.map((s) => ({ value: s.id, label: s.name })),
-  ]
-  const serverValue = autoMode ? 'auto' : pinned
-  const onServerChange = (v) => (v === 'auto' ? pickAuto() : pickManual(v))
+  // Server dropdown: numbered labels, first server is default
+  const serverOptions = list.map((s, i) => ({ value: s.id, label: `Server ${i + 1}` }))
+  const serverValue = pinned || list[0]?.id
+  const onServerChange = (v) => pickManual(v)
 
   // AniList descriptions are HTML — strip tags so the overlay reads cleanly.
   const cleanDesc = (description || '')
@@ -270,25 +237,32 @@ export default function VideoPlayer({
             options={serverOptions}
           />
 
-          {anilistId && serverSupportsBoth && (
-            <div className="videasy-toggle">
-              <span className="videasy-toggle-label">Source</span>
-              <button
-                type="button"
-                className={!useAnilistId ? 'active' : ''}
-                onClick={() => setVideasyMode('tmdb')}
-              >
-                TMDB
-              </button>
-              <button
-                type="button"
-                className={useAnilistId ? 'active' : ''}
-                onClick={() => setVideasyMode('anilist')}
-              >
-                AniList
-              </button>
-            </div>
-          )}
+          {list
+            .filter((s) => s.supportsAnilist && s.anilistEmbedUrl)
+            .map((s) => {
+              const usingAnilist = Boolean(serverUseAnilist[s.id])
+              return (
+                <div key={s.id} className="server-id-toggle">
+                  <span className="server-id-toggle-label">{s.name}</span>
+                  <button
+                    type="button"
+                    className={!usingAnilist ? 'active' : ''}
+                    onClick={() => !usingAnilist && toggleServerMode(s.id)}
+                    title={`Use TMDB id for ${s.name}`}
+                  >
+                    TMDB
+                  </button>
+                  <button
+                    type="button"
+                    className={usingAnilist ? 'active' : ''}
+                    onClick={() => usingAnilist && toggleServerMode(s.id)}
+                    title={`Use AniList id for ${s.name}`}
+                  >
+                    AniList
+                  </button>
+                </div>
+              )
+            })}
         </div>
 
         {showPrevNext && (

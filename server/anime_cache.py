@@ -26,7 +26,7 @@ def _is_expired(expires_at_str: str) -> bool:
 
 # ===== ANIME =====
 
-async def get_anime(anilist_id: int) -> dict | None:
+async def get_anime(anilist_id: int, ignore_expiry: bool = False) -> dict | None:
     def _query():
         return (
             supabase_client.table("anime_cache")
@@ -39,7 +39,7 @@ async def get_anime(anilist_id: int) -> dict | None:
     row = resp.data if resp else None
     if not row:
         return None
-    if _is_expired(row["expires_at"]):
+    if not ignore_expiry and _is_expired(row["expires_at"]):
         await delete_anime(anilist_id)
         return None
     return row["data"]
@@ -77,7 +77,7 @@ async def delete_anime(anilist_id: int) -> None:
 
 # ===== SEARCH =====
 
-async def get_search(query: str, page: int = 1) -> dict | None:
+async def get_search(query: str, page: int = 1, ignore_expiry: bool = False) -> dict | None:
     def _query_fn():
         return (
             supabase_client.table("search_cache")
@@ -91,7 +91,7 @@ async def get_search(query: str, page: int = 1) -> dict | None:
     row = resp.data if resp else None
     if not row:
         return None
-    if _is_expired(row["expires_at"]):
+    if not ignore_expiry and _is_expired(row["expires_at"]):
         await delete_search(query, page)
         return None
     return row["data"]
@@ -130,7 +130,7 @@ async def delete_search(query: str, page: int) -> None:
 
 # ===== SHELF =====
 
-async def get_shelf(shelf_name: str, page: int = 1) -> dict | None:
+async def get_shelf(shelf_name: str, page: int = 1, ignore_expiry: bool = False) -> dict | None:
     def _query_fn():
         return (
             supabase_client.table("shelf_cache")
@@ -144,7 +144,7 @@ async def get_shelf(shelf_name: str, page: int = 1) -> dict | None:
     row = resp.data if resp else None
     if not row:
         return None
-    if _is_expired(row["expires_at"]):
+    if not ignore_expiry and _is_expired(row["expires_at"]):
         await delete_shelf(shelf_name, page)
         return None
     return row["data"]

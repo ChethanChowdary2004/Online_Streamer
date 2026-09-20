@@ -147,7 +147,7 @@ export default function Topbar({
     () => (isAnimePage ? getAnimeGenres() : Promise.resolve(null)),
     [isAnimePage],
   )
-  const genreList = genresFetch.data?.GenreCollection || []
+  const genreList = (genresFetch.data?.GenreCollection || []).filter((g) => g !== 'Hentai')
 
   const isBrowsedPage =
     location.pathname === '/movies' ||
