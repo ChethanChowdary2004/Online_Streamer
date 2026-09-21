@@ -171,7 +171,6 @@ export default function VideoPlayer({
             <h3>Couldn't load this video</h3>
             <p>
               The current server failed to respond.
-              {autoMode && attempt < list.length - 1 && ' Trying the next one…'}
             </p>
             <button className="vbtn vplayer-error-btn" onClick={retry}>
               ↻ Retry

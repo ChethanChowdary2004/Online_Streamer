@@ -41,16 +41,16 @@ export default function Topbar({
 }) {
   const [query, setQuery] = useState('')
   const [dropdownOpen, setDropdownOpen] = useState(false)
-  const [navMenuOpen, setNavMenuOpen] = useState(false)
+  const [panelOpen, setPanelOpen] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState(null)
   const dropdownRef = useRef(null)
-  const navMenuRef = useRef(null)
   const fileInputRef = useRef(null)
   const navigate = useNavigate()
   const location = useLocation()
   const { user, profile, signOut, setProfile } = useAuth()
 
+  // Close desktop avatar dropdown on outside click
   useEffect(() => {
     if (!dropdownOpen) return
     function handleClick(e) {
@@ -62,20 +62,31 @@ export default function Topbar({
     return () => document.removeEventListener('mousedown', handleClick)
   }, [dropdownOpen])
 
+  // Close side panel on route change
   useEffect(() => {
-    if (!navMenuOpen) return
-    function handleClick(e) {
-      if (navMenuRef.current && !navMenuRef.current.contains(e.target)) {
-        setNavMenuOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [navMenuOpen])
-
-  useEffect(() => {
-    setNavMenuOpen(false)
+    setPanelOpen(false)
   }, [location.pathname])
+
+  // Lock body scroll when panel is open
+  useEffect(() => {
+    if (panelOpen) {
+      const scrollTop = window.scrollY
+      document.body.style.position = 'fixed'
+      document.body.style.top = `-${scrollTop}px`
+      document.body.style.width = '100%'
+    } else {
+      const scrollTop = parseInt(document.body.style.top || '0') * -1
+      document.body.style.position = ''
+      document.body.style.top = ''
+      document.body.style.width = ''
+      window.scrollTo(0, scrollTop)
+    }
+    return () => {
+      document.body.style.position = ''
+      document.body.style.top = ''
+      document.body.style.width = ''
+    }
+  }, [panelOpen])
 
   const submit = (e) => {
     e.preventDefault()
@@ -161,41 +172,33 @@ export default function Topbar({
     { to: '/anime', label: 'Anime' },
   ]
 
+  const closePanel = () => setPanelOpen(false)
+
+  const handlePanelNav = () => {
+    closePanel()
+  }
+
   return (
     <header className="navbar">
+      {/* Hamburger — leftmost on mobile */}
+      <button
+        type="button"
+        className={`mobile-menu-toggle ${panelOpen ? 'active' : ''}`}
+        onClick={() => setPanelOpen((v) => !v)}
+        aria-label="Open navigation menu"
+        aria-expanded={panelOpen}
+        aria-controls="side-panel"
+      >
+        <span />
+        <span />
+        <span />
+      </button>
+
       <Link to="/" className="navbar-brand">
         <img src="/yugostream_title_transparent.png" alt="YUGOSTREAM" className="navbar-brand-image" />
       </Link>
 
-      <div className="mobile-menu-wrapper" ref={navMenuRef}>
-        <button
-          type="button"
-          className={`mobile-menu-toggle ${navMenuOpen ? 'active' : ''}`}
-          onClick={() => setNavMenuOpen((v) => !v)}
-          aria-label="Open navigation menu"
-          title="Open navigation menu"
-          aria-expanded={navMenuOpen}
-          aria-controls="mobile-topbar-nav"
-        >
-          <span />
-          <span />
-          <span />
-        </button>
-        {navMenuOpen && (
-          <nav id="mobile-topbar-nav" className="mobile-menu-dropdown" aria-label="Primary navigation">
-            {navLinks.map((link) => (
-              <Link
-                key={link.to}
-                to={link.to}
-                className={`mobile-menu-link ${location.pathname === link.to ? 'active' : ''}`}
-              >
-                {link.label}
-              </Link>
-            ))}
-          </nav>
-        )}
-      </div>
-
+      {/* Desktop nav links */}
       <nav className="nav-links">
         {navLinks.map((link) => (
           <Link
@@ -208,6 +211,7 @@ export default function Topbar({
         ))}
       </nav>
 
+      {/* Search bar */}
       {isAnimePage ? (
         <div className="navbar-search anime-search">
           <input
@@ -241,6 +245,7 @@ export default function Topbar({
         </form>
       )}
 
+      {/* Desktop right-side buttons */}
       <div className="navbar-right">
         {user && (
           <>
@@ -250,11 +255,7 @@ export default function Topbar({
               aria-label="View history"
               title="View history"
             >
-              <svg
-                viewBox="0 0 24 24"
-                fill="currentColor"
-                xmlns="http://www.w3.org/2000/svg"
-              >
+              <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
                 <path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v6l5.25 3.15.75-1.23-4-2.42z" />
               </svg>
             </button>
@@ -265,11 +266,7 @@ export default function Topbar({
               aria-label="View favorites"
               title="View favorites"
             >
-              <svg
-                viewBox="0 0 24 24"
-                fill="currentColor"
-                xmlns="http://www.w3.org/2000/svg"
-              >
+              <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
                 <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
               </svg>
             </button>
@@ -280,26 +277,27 @@ export default function Topbar({
           {user ? (
             <div className="avatar-wrapper">
               <Avatar user={user} profile={profile} onClick={() => setDropdownOpen((v) => !v)} isUploading={isUploading} />
+              {/* Hidden file input always in DOM so both desktop dropdown and mobile side panel can trigger it */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileSelect}
+                style={{ display: 'none' }}
+                aria-label="Upload avatar"
+              />
               {dropdownOpen && (
                 <div className="avatar-dropdown">
                   <div className="avatar-dropdown-email">{user.email}</div>
                   {uploadError && (
                     <div className="avatar-dropdown-error">{uploadError}</div>
                   )}
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileSelect}
-                    style={{ display: 'none' }}
-                    aria-label="Upload avatar"
-                  />
                   <button
                     className="avatar-dropdown-upload"
                     onClick={handleUploadClick}
                     disabled={isUploading}
                   >
-                    {isUploading ? 'Uploading...' : 'Upload photo'}
+                    {isUploading ? 'Uploading...' : profile?.avatar_url ? 'Update photo' : 'Upload photo'}
                   </button>
                   <button
                     className="avatar-dropdown-logout"
@@ -321,6 +319,102 @@ export default function Topbar({
           )}
         </div>
       </div>
+
+      {/* Mobile side panel */}
+      {panelOpen && (
+        <div
+          className="side-panel-backdrop"
+          onClick={closePanel}
+          aria-hidden="true"
+        />
+      )}
+      <nav
+        id="side-panel"
+        className={`side-panel ${panelOpen ? 'open' : ''}`}
+        aria-label="Navigation menu"
+        aria-hidden={!panelOpen}
+      >
+        <div className="side-panel-header">
+          <Link to="/" className="side-panel-logo" onClick={handlePanelNav}>
+            <img src="/yugostream_title_transparent.png" alt="YUGOSTREAM" className="navbar-brand-image" />
+          </Link>
+          <button
+            type="button"
+            className="side-panel-close"
+            onClick={closePanel}
+            aria-label="Close menu"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="side-panel-nav">
+          {navLinks.map((link) => (
+            <Link
+              key={link.to}
+              to={link.to}
+              className={`side-panel-link ${location.pathname === link.to ? 'active' : ''}`}
+              onClick={handlePanelNav}
+            >
+              {link.label}
+            </Link>
+          ))}
+        </div>
+
+        {user && (
+          <div className="side-panel-section">
+            <Link
+              to="/favorites"
+              className={`side-panel-link ${location.pathname === '/favorites' ? 'active' : ''}`}
+              onClick={handlePanelNav}
+            >
+              Favorites
+            </Link>
+            <Link
+              to="/history"
+              className={`side-panel-link ${location.pathname === '/history' ? 'active' : ''}`}
+              onClick={handlePanelNav}
+            >
+              History
+            </Link>
+          </div>
+        )}
+
+        <div className="side-panel-account">
+          {user ? (
+            <>
+              <div className="side-panel-user">
+                <Avatar user={user} profile={profile} onClick={() => {}} isUploading={isUploading} />
+                <span className="side-panel-email">{user.email}</span>
+              </div>
+              {uploadError && (
+                <div className="avatar-dropdown-error">{uploadError}</div>
+              )}
+              <button
+                className="side-panel-upload"
+                onClick={handleUploadClick}
+                disabled={isUploading}
+              >
+                {isUploading ? 'Uploading…' : profile?.avatar_url ? 'Update photo' : 'Upload photo'}
+              </button>
+              <button
+                className="side-panel-logout"
+                onClick={async () => { closePanel(); await signOut(); navigate('/logout') }}
+              >
+                Log out
+              </button>
+            </>
+          ) : (
+            <Link
+              to="/login"
+              className="side-panel-login"
+              onClick={handlePanelNav}
+            >
+              Log in
+            </Link>
+          )}
+        </div>
+      </nav>
     </header>
   )
 }
