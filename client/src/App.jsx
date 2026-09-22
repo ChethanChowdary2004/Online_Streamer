@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Route, Routes } from 'react-router-dom'
+import { Analytics } from '@vercel/analytics/react'
 import { AuthProvider } from './context/AuthContext'
 import { FavoritesProvider } from './context/FavoritesContext'
 import Topbar from './components/Topbar'
@@ -56,6 +57,7 @@ export default function App() {
             <Route path="*" element={<Home />} />
           </Routes>
         </main>
+        <Analytics />
       </FavoritesProvider>
     </AuthProvider>
   )
