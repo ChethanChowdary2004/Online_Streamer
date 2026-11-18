@@ -49,7 +49,7 @@ startDate { year }
 TRENDING_QUERY = """
 query ($page: Int) {
   Page(page: $page, perPage: 12) {
-    media(type: ANIME, sort: TRENDING_DESC) {
+    media(type: ANIME, isAdult: false, sort: TRENDING_DESC) {
       id
       coverImage { large extraLarge }
       bannerImage
@@ -70,7 +70,7 @@ query ($page: Int) {
 TOP_RATED_QUERY = """
 query ($page: Int) {
   Page(page: $page, perPage: 20) {
-    media(type: ANIME, sort: SCORE_DESC) {
+    media(type: ANIME, isAdult: false, sort: SCORE_DESC) {
       id
       coverImage { large extraLarge }
       bannerImage
@@ -91,7 +91,7 @@ query ($page: Int) {
 LATEST_QUERY = """
 query ($page: Int) {
   Page(page: $page, perPage: 20) {
-    media(type: ANIME, status: RELEASING, sort: START_DATE_DESC) {
+    media(type: ANIME, isAdult: false, status: RELEASING, sort: START_DATE_DESC) {
       id
       coverImage { large extraLarge }
       bannerImage
@@ -112,7 +112,7 @@ query ($page: Int) {
 MOVIES_QUERY = """
 query ($page: Int) {
   Page(page: $page, perPage: 20) {
-    media(type: ANIME, format: MOVIE, sort: SCORE_DESC) {
+    media(type: ANIME, isAdult: false, format: MOVIE, sort: SCORE_DESC) {
       id
       coverImage { large extraLarge }
       bannerImage
@@ -134,7 +134,7 @@ SEARCH_QUERY = """
 query ($page: Int, $q: String) {
   Page(page: $page, perPage: 20) {
     pageInfo { hasNextPage total }
-    media(type: ANIME, search: $q) {
+    media(type: ANIME, isAdult: false, search: $q) {
       id
       coverImage { large extraLarge }
       bannerImage
@@ -156,7 +156,7 @@ GENRE_QUERY = """
 query ($page: Int, $genre: String) {
   Page(page: $page, perPage: 20) {
     pageInfo { hasNextPage total }
-    media(type: ANIME, genre: $genre, sort: POPULARITY_DESC) {
+    media(type: ANIME, isAdult: false, genre: $genre, sort: POPULARITY_DESC) {
       id
       coverImage { large extraLarge }
       bannerImage
@@ -269,7 +269,13 @@ async def trending(page: int = 1) -> dict:
     if cached:
         return cached
 
-    result = await _post(TRENDING_QUERY, {"page": page})
+    try:
+        result = await _post(TRENDING_QUERY, {"page": page})
+    except Exception:
+        stale = await anime_cache.get_shelf("trending", page, ignore_expiry=True)
+        if stale:
+            return stale
+        raise
     await anime_cache.set_shelf("trending", page, result)
     return result
 
@@ -280,7 +286,13 @@ async def top_rated(page: int = 1) -> dict:
     if cached:
         return cached
 
-    result = await _post(TOP_RATED_QUERY, {"page": page})
+    try:
+        result = await _post(TOP_RATED_QUERY, {"page": page})
+    except Exception:
+        stale = await anime_cache.get_shelf("top-rated", page, ignore_expiry=True)
+        if stale:
+            return stale
+        raise
     await anime_cache.set_shelf("top-rated", page, result)
     return result
 
@@ -291,7 +303,13 @@ async def latest(page: int = 1) -> dict:
     if cached:
         return cached
 
-    result = await _post(LATEST_QUERY, {"page": page})
+    try:
+        result = await _post(LATEST_QUERY, {"page": page})
+    except Exception:
+        stale = await anime_cache.get_shelf("latest", page, ignore_expiry=True)
+        if stale:
+            return stale
+        raise
     await anime_cache.set_shelf("latest", page, result)
     return result
 
@@ -302,7 +320,13 @@ async def movies(page: int = 1) -> dict:
     if cached:
         return cached
 
-    result = await _post(MOVIES_QUERY, {"page": page})
+    try:
+        result = await _post(MOVIES_QUERY, {"page": page})
+    except Exception:
+        stale = await anime_cache.get_shelf("movies", page, ignore_expiry=True)
+        if stale:
+            return stale
+        raise
     await anime_cache.set_shelf("movies", page, result)
     return result
 
@@ -313,19 +337,33 @@ async def search(q: str, page: int = 1) -> dict:
     if cached:
         return cached
 
-    result = await _post(SEARCH_QUERY, {"page": page, "q": q})
+    try:
+        result = await _post(SEARCH_QUERY, {"page": page, "q": q})
+    except Exception:
+        stale = await anime_cache.get_search(q, page, ignore_expiry=True)
+        if stale:
+            return stale
+        raise
     await anime_cache.set_search(q, page, result)
     return result
 
 
 async def by_genre(genre: str, page: int = 1) -> dict:
     """One page of anime under a single genre tag, most popular first. Uses cache."""
+    if genre.lower() == "hentai":
+        return {}
     cache_key = f"genre_{genre}"
     cached = await anime_cache.get_shelf(cache_key, page)
     if cached:
         return cached
 
-    result = await _post(GENRE_QUERY, {"page": page, "genre": genre})
+    try:
+        result = await _post(GENRE_QUERY, {"page": page, "genre": genre})
+    except Exception:
+        stale = await anime_cache.get_shelf(cache_key, page, ignore_expiry=True)
+        if stale:
+            return stale
+        raise
     await anime_cache.set_shelf(cache_key, page, result)
     return result
 
@@ -336,7 +374,16 @@ async def genres() -> dict:
     if cached:
         return cached
 
-    result = await _post(GENRES_QUERY)
+    try:
+        result = await _post(GENRES_QUERY)
+    except Exception:
+        stale = await anime_cache.get_shelf("genres", 1, ignore_expiry=True)
+        if stale:
+            return stale
+        raise
+
+    genres_list = result.get("GenreCollection") or []
+    result = {**result, "GenreCollection": [g for g in genres_list if g.lower() != "hentai"]}
     await anime_cache.set_shelf("genres", 1, result)
     return result
 
@@ -349,7 +396,13 @@ async def detail(anilist_id: int) -> dict:
     if cached:
         return cached
 
-    result = await _post(DETAIL_QUERY, {"id": anilist_id})
+    try:
+        result = await _post(DETAIL_QUERY, {"id": anilist_id})
+    except Exception:
+        stale = await anime_cache.get_anime(anilist_id, ignore_expiry=True)
+        if stale:
+            return stale
+        raise
 
     # Extract title for display/logging
     media = result.get("Media", {})

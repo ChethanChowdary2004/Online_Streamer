@@ -102,7 +102,16 @@ function MovieAnimePlayer({ tmdbId, anilistId, animeRelations, hasTmdbMatch, tit
         year,
         mediaType: 'movie',
       })
-      servers = res.servers || []
+      const rawServers = res.servers || []
+      servers = rawServers.map((server) => {
+        const dual = ['vidrift', 'vidbolt'].includes(server.id)
+        if (!dual) return server
+        const anilistEmbedUrl =
+          server.id === 'vidrift'
+            ? `https://embed.vidrift.in/embed/movie/${anilistId}`
+            : `https://vidbolt.xyz/anime/${anilistId}`
+        return { ...server, supportsAnilist: true, anilistEmbedUrl }
+      })
       const movieDetail = await fetch(`https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${import.meta.env.VITE_TMDB_API_KEY}`)
         .then(r => r.json())
         .catch(() => ({}))
@@ -163,19 +172,9 @@ function MovieAnimePlayer({ tmdbId, anilistId, animeRelations, hasTmdbMatch, tit
 
   let servers = data.servers
 
-  if (!hasTmdbMatch) {
-    servers = servers.map((server) => ({
-      ...server,
-      disabled: !['vidrift', 'vidbolt'].includes(server.id),
-    }))
-  } else {
-    servers = servers.map((server) => ({
-      ...server,
-      disabled: false,
-    }))
-  }
-
-  const selectableServers = servers.filter(s => !s.disabled)
+  const selectableServers = hasTmdbMatch
+    ? servers.map((s) => ({ ...s, disabled: false }))
+    : servers.filter((s) => ['vidrift', 'vidbolt'].includes(s.id))
 
   const handleServerChange = (serverId) => {
     if (serverId === 'auto') {
@@ -280,23 +279,27 @@ function SeriesAnimePlayer({ tmdbId, anilistId, animeRelations, hasTmdbMatch, ti
         id: 'vidrift',
         name: 'VidRift',
         embedUrl: `https://embed.vidrift.in/embed/tv/${anilistId}/1/${activeEpisode}`,
-        supportsAnilist: false,
+        supportsAnilist: true,
         disabled: false,
       },
       {
         id: 'vidbolt',
         name: 'VidBolt',
         embedUrl: `https://vidbolt.xyz/anime/${anilistId}/${activeEpisode}`,
-        supportsAnilist: false,
+        supportsAnilist: true,
         disabled: false,
       },
     ]
   } else {
-    servers = servers.map((server) => ({
-      ...server,
-      disabled: false,
-      supportsAnilist: ['vidrift', 'vidbolt'].includes(server.id) ? true : false,
-    }))
+    servers = servers.map((server) => {
+      const dual = ['vidrift', 'vidbolt'].includes(server.id)
+      if (!dual) return { ...server, disabled: false, supportsAnilist: false }
+      const anilistEmbedUrl =
+        server.id === 'vidrift'
+          ? `https://embed.vidrift.in/embed/tv/${anilistId}/1/${activeEpisode}`
+          : `https://vidbolt.xyz/anime/${anilistId}/${activeEpisode}`
+      return { ...server, disabled: false, supportsAnilist: true, anilistEmbedUrl }
+    })
   }
 
   const selectableServers = servers.filter(s => !s.disabled)
